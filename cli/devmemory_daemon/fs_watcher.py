@@ -1,18 +1,24 @@
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from pathlib import Path
-import time
 from datetime import datetime
 import json
 
+IGNORE_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".devmemory"}
+
 
 class FSWatcher(FileSystemEventHandler):
-    """File system watcher that creates snapshot events on file changes."""
-
     def __init__(self, project_root: Path, snapshot_callback):
         super().__init__()
         self.project_root = Path(project_root)
         self.snapshot_callback = snapshot_callback
+
+    def dispatch(self, event):
+        # Skip ignored folders
+        parts = Path(event.src_path).parts
+        if any(x in IGNORE_DIRS for x in parts):
+            return
+        super().dispatch(event)
 
     def on_modified(self, event):
         if not event.is_directory:

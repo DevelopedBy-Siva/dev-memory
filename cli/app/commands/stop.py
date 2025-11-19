@@ -7,6 +7,6 @@ console = Console()
 def stop():
     try:
         stop_daemon()
-        console.print("[yellow]DevMemory daemon stopped[/yellow]")
-    except RuntimeError as e:
-        console.print(f"[red]{str(e)}[/red]")
+        console.print("[yellow]DevMemory stopped[/yellow]")
+    except RuntimeError:
+        console.print("[red]DevMemory is not running[/red]")

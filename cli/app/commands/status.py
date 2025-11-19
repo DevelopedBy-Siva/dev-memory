@@ -1,11 +1,13 @@
 from rich.console import Console
-from app.utils.daemon import is_running, read_pid
+from app.utils.daemon import is_running
 
 console = Console()
 
 
 def status():
-    if is_running():
-        console.print(f"[green]DevMemory daemon is running (PID {read_pid()})[/green]")
+    running, root, pid = is_running()
+
+    if running:
+        console.print(f"[green]DevMemory is running in {root} (PID {pid})[/green]")
     else:
-        console.print("[red]DevMemory daemon is not running[/red]")
+        console.print("[red]DevMemory is not running[/red]")

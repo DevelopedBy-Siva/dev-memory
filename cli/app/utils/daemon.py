@@ -1,34 +1,42 @@
-import subprocess
+from subprocess import Popen
 import sys
 import os
+from rich.console import Console
+
 from .pidfile import write_pid, read_pid, remove_pid
 from .config import ensure_dirs, LOG_FILE
 
+console = Console()
 
-def start_daemon():
+
+def start_daemon(project_root: str):
     ensure_dirs()
 
-    if read_pid():
-        raise RuntimeError("Daemon already running")
+    pid, running_root = read_pid()
 
-    log = open(LOG_FILE, "a")
+    if pid is not None:
+        console.print(f"DevMemory is already running in {running_root} (PID {pid}).")
+        return
 
-    # Launch daemon in background
-    process = subprocess.Popen(
-        [sys.executable, "-m", "devmemory_daemon.run_daemon"],
-        stdout=log,
-        stderr=log,
-        start_new_session=True,
-    )
+    cmd = [
+        sys.executable,
+        "-m",
+        "devmemory_daemon.run_daemon",
+        project_root,
+    ]
 
-    write_pid(process.pid)
-    return process.pid
+    with open(LOG_FILE, "a") as log:
+        process = Popen(cmd, stdout=log, stderr=log, start_new_session=False)
+
+    write_pid(process.pid, project_root)
+    console.print("[green]DevMemory started[/green]")
 
 
 def stop_daemon():
-    pid = read_pid()
-    if not pid:
-        raise RuntimeError("Daemon not running")
+    pid, _ = read_pid()
+
+    if pid is None:
+        raise RuntimeError("DevMemory not running")
 
     try:
         os.kill(pid, 15)
@@ -39,11 +47,5 @@ def stop_daemon():
 
 
 def is_running():
-    pid = read_pid()
-    if not pid:
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except:
-        return False
+    pid, root = read_pid()
+    return pid is not None, root, pid

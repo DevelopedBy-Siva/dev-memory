@@ -11,6 +11,7 @@ def get_snapshot_path(project_root):
 
 
 def write_snapshot(event: dict, project_root: Path):
+    """Write snapshot JSON event into the correct project's snapshot file."""
     path = get_snapshot_path(project_root)
     with path.open("a") as f:
         f.write(json.dumps(event) + "\n")
