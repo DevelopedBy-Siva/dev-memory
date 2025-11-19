@@ -9,6 +9,7 @@ from app.commands.logs import logs
 # NEW
 from app.commands.insight import insight_app
 from app.commands.diff import diff_app
+from app.commands.summarize import summarize_app  # <-- ADD THIS
 
 console = Console()
 app = typer.Typer(help="DevMemory CLI")
@@ -22,3 +23,4 @@ app.command("logs")(logs)
 # NEW subcommand groups
 app.add_typer(insight_app, name="insight")
 app.add_typer(diff_app, name="diff")
+app.add_typer(summarize_app, name="summarize")
