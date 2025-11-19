@@ -11,12 +11,11 @@ requires-python = ">=3.9"
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
-    "watchdog>=4.0.0",
 ]
-
 
 [project.scripts]
 devmemory = "app.__main__:main"
 
-[tool.setuptools]
-packages = ["app", "devmemory_daemon"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app", "app.*", "devmemory_daemon", "devmemory_daemon.*"]

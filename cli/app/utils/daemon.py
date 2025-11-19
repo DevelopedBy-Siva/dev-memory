@@ -1,3 +1,4 @@
+# app/utils/daemon.py
 from subprocess import Popen
 import sys
 import os
@@ -9,11 +10,10 @@ from .config import ensure_dirs, LOG_FILE
 console = Console()
 
 
-def start_daemon(project_root: str):
+def start_daemon(project_root: str) -> None:
     ensure_dirs()
 
     pid, running_root = read_pid()
-
     if pid is not None:
         console.print(f"DevMemory is already running in {running_root} (PID {pid}).")
         return
@@ -29,17 +29,16 @@ def start_daemon(project_root: str):
         process = Popen(cmd, stdout=log, stderr=log, start_new_session=False)
 
     write_pid(process.pid, project_root)
-    console.print("[green]DevMemory started[/green]")
+    console.print("[green]DevMemory daemon started[/green]")
 
 
-def stop_daemon():
+def stop_daemon() -> None:
     pid, _ = read_pid()
-
     if pid is None:
         raise RuntimeError("DevMemory not running")
 
     try:
-        os.kill(pid, 15)
+        os.kill(pid, 15)  # SIGTERM
     except ProcessLookupError:
         pass
 

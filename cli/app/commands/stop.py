@@ -1,3 +1,4 @@
+# app/commands/stop.py
 from rich.console import Console
 from app.utils.daemon import stop_daemon
 

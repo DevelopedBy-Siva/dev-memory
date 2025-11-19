@@ -1,29 +1,25 @@
+# app/commands/start.py
 import typer
 from rich.console import Console
 from pathlib import Path
 
 from app.utils.daemon import start_daemon, is_running
-from devmemory_daemon.project_root import find_git_root
 
 console = Console()
-app = typer.Typer()
 
 
-@app.command()
-def start():
+def start(project_path: str = "."):
     running, root, pid = is_running()
-
     if running:
-        console.print(f"DevMemory is already running in {root} (PID {pid}).")
+        console.print(f"DevMemory is already running in {root} (PID {pid})")
         return
 
-    cwd = Path.cwd()
-    detected = find_git_root(cwd)
-    console.print(f"Detected project root: {detected}")
+    root = Path(project_path).resolve()
+    console.print(f"Project root: {root}")
 
     confirm = input("Start DevMemory here? [Y/n]: ").strip().lower() or "y"
     if confirm != "y":
-        console.print("Aborted.")
+        console.print("[yellow]Aborted.[/yellow]")
         return
 
-    start_daemon(str(detected))
+    start_daemon(str(root))

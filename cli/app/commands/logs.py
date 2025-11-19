@@ -1,11 +1,15 @@
+# app/commands/logs.py
 from rich.console import Console
 from app.utils.config import LOG_FILE
 
 console = Console()
 
 
-def logs():
-    if LOG_FILE.exists():
-        console.print(LOG_FILE.read_text())
-    else:
-        console.print("[red]No logs found[/red]")
+def logs(lines: int = 100):
+    if not LOG_FILE.exists():
+        console.print("[yellow]No logs yet.[/yellow]")
+        return
+
+    content = LOG_FILE.read_text().splitlines()
+    for line in content[-lines:]:
+        console.print(line)

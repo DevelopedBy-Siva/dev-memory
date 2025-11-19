@@ -217,3 +217,5 @@ __marimo__/
 
 # custom
 devmemory_cli.egg-info/
+
+.devmemory/

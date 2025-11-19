@@ -1,3 +1,4 @@
+# app/utils/config.py
 from pathlib import Path
 
 DEVMEMORY_HOME = Path.home() / ".devmemory"
