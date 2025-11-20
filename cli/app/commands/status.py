@@ -1,4 +1,3 @@
-# app/commands/status.py
 from rich.console import Console
 from app.utils.daemon import is_running
 

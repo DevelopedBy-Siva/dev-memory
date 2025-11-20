@@ -1,4 +1,3 @@
-# devmemory_daemon/run_daemon.py
 import os
 import sys
 import time
@@ -6,9 +5,8 @@ import signal
 import logging
 from pathlib import Path
 
-from .git_engine import commit_and_capture_patch, DEVMEMORY_HOME
-
-LOG_FILE = DEVMEMORY_HOME / "daemon.log"
+from devmemory_daemon.git_engine import commit_and_capture_patch
+from app.utils.config import LOG_FILE
 
 logging.basicConfig(
     filename=str(LOG_FILE),
@@ -39,7 +37,7 @@ def main():
     project_root = Path(sys.argv[1]).resolve()
     os.chdir(project_root)
 
-    log.info(f"Starting DevMemory (shadow git) for {project_root}")
+    log.info(f"Starting DevMemory for {project_root}")
 
     while running:
         try:

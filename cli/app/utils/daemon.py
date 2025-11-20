@@ -1,4 +1,3 @@
-# app/utils/daemon.py
 from subprocess import Popen
 import sys
 import os
@@ -38,7 +37,7 @@ def stop_daemon() -> None:
         raise RuntimeError("DevMemory not running")
 
     try:
-        os.kill(pid, 15)  # SIGTERM
+        os.kill(pid, 15)
     except ProcessLookupError:
         pass
 

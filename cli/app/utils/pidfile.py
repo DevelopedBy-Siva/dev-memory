@@ -1,11 +1,9 @@
-# app/utils/pidfile.py
 import os
-from .config import PID_FILE
 from pathlib import Path
+from .config import PID_FILE
 
 
 def pid_alive(pid: int) -> bool:
-    """Return True if a process with this PID exists."""
     try:
         os.kill(pid, 0)
         return True
@@ -23,7 +21,6 @@ def remove_pid() -> None:
 
 
 def read_pid():
-    """Return (pid, root) or (None, None). Clean up stale files."""
     if not PID_FILE.exists():
         return None, None
 
@@ -33,7 +30,6 @@ def read_pid():
         return None, None
 
     pid_str, root = content.split(":", 1)
-
     try:
         pid = int(pid_str)
     except ValueError:
@@ -49,6 +45,6 @@ def read_pid():
 
 def get_running_project_root() -> Path | None:
     pid, root = read_pid()
-    if pid is None:
+    if pid is None or not root:
         return None
-    return Path(root).resolve()
+    return Path(root)

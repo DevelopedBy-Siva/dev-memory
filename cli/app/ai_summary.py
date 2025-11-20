@@ -1,159 +1,53 @@
-import json
 from pathlib import Path
-from typing import List, Dict, Iterable
-
 import google.generativeai as genai
-from devmemory_daemon.git_engine import project_id
 from app.utils.pidfile import get_running_project_root
 
 genai.configure(api_key="AIzaSyA9ISVUaLS-LWiq01IOKosIs2Fgv7DN930")
 MODEL_NAME = "gemini-2.5-flash"
 
 
-def resolve_dirs():
-    """
-    Always return snapshot & memory folders based on the project root
-    where DevMemory daemon is running.
-    """
+def get_patch_dir() -> Path:
+    """Return the .devmemory/patches directory for the running project."""
     project_root = get_running_project_root()
     if not project_root:
-        raise RuntimeError("DevMemory is not running. Start with: devmemory start")
+        raise RuntimeError("DevMemory is not running")
 
-    snapshot_dir = project_root / ".devmemory" / "snapshots"
-    memory_dir = project_root / ".devmemory" / "memory"
+    patch_dir = project_root / ".devmemory" / "patches"
+    if not patch_dir.exists():
+        raise RuntimeError("No patches found yet.")
 
-    memory_dir.mkdir(parents=True, exist_ok=True)
-
-    return snapshot_dir, memory_dir
-
-
-def stream_jsonl(path: Path) -> Iterable[Dict]:
-    with path.open("r", encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                yield json.loads(line)
-            except:
-                continue
-
-
-INTERESTING = {
-    "task",
-    "todo",
-    "note",
-    "decision",
-    "problem",
-    "fix",
-    "context",
-    "command",
-}
-
-
-def extract_signals(snapshot_path: Path) -> List[str]:
-    lines = []
-
-    for entry in stream_jsonl(snapshot_path):
-        etype = entry.get("type", "").lower()
-        content = entry.get("content") or entry.get("text") or ""
-
-        if not content:
-            continue
-
-        if etype in INTERESTING:
-            lines.append(f"{etype.upper()}: {content}")
-            continue
-
-        low = content.lower()
-        if any(kw in low for kw in ["todo", "fix", "next step"]):
-            lines.append(f"NOTE: {content}")
-
-    return lines
-
-
-def chunk_text(lines: List[str], max_chars: int = 8000) -> List[str]:
-    chunks = []
-    current = []
-    cur_len = 0
-
-    for line in lines:
-        if cur_len + len(line) + 1 > max_chars:
-            chunks.append("\n".join(current))
-            current = []
-            cur_len = 0
-
-        current.append(line)
-        cur_len += len(line)
-
-    if current:
-        chunks.append("\n".join(current))
-
-    return chunks
-
-
-def gsum(text: str) -> str:
-    model = genai.GenerativeModel(MODEL_NAME)
-
-    prompt = f"""
-Summarize the developer logs below.
-
-Extract:
-- tasks completed
-- tasks in progress
-- pending tasks
-- key decisions
-- problems encountered
-- solutions
-- notes
-- reasoning steps
-
-Be concise and structured.
-
---- LOGS START ---
-{text}
---- LOGS END ---
-"""
-    response = model.generate_content(prompt)
-    return response.text.strip()
+    return patch_dir
 
 
 def summarize_snapshot(date: str) -> Path:
-    # Resolve dirs
-    snapshot_dir, memory_dir = resolve_dirs()
+    """Summarize all git patches for a given date (YYYY-MM-DD)."""
 
     project_root = get_running_project_root()
     if not project_root:
         raise RuntimeError("DevMemory is not running")
 
-    # Compute patches dir
-    patch_dir = (
-        Path.home() / ".devmemory" / "projects" / project_id(project_root) / "patches"
-    )
+    patch_dir = get_patch_dir()
 
-    if not patch_dir.exists():
-        raise RuntimeError("No patches found for this project.")
+    # Convert "2025-11-19" → "20251119"
+    prefix = date.replace("-", "")
 
-    # Convert date "2025-11-19" → "20251119"
-    date_prefix = date.replace("-", "")
-
-    # Gather matching patches
+    # Find matching patches
     matched = []
     for f in patch_dir.glob("*.patch"):
-        ts = f.name.split("_")[0]  # 20251119T072344Z
-        if ts.startswith(date_prefix):
+        ts = f.name.split("_")[0]
+        if ts.startswith(prefix):
             matched.append(f)
 
     if not matched:
         raise FileNotFoundError(f"No patches found for date {date}")
 
-    # Merge patch texts
+    # Combine patch text
     combined = ""
     for f in matched:
-        combined += f"\n--- PATCH: {f.name} ---\n"
+        combined += f"\n\n--- PATCH: {f.name} ---\n"
         combined += f.read_text()
 
-    # Run AI summary
+    # AI summary
     model = genai.GenerativeModel(MODEL_NAME)
     resp = model.generate_content(
         f"""
@@ -163,9 +57,9 @@ Extract:
 - Work done
 - Tasks in progress
 - Bugs fixed
-- Decisions
-- Key context
-- Future work
+- Key changes
+- Notes
+- Future work ideas
 
 {combined}
 """
@@ -173,8 +67,11 @@ Extract:
 
     result = resp.text.strip()
 
-    # Save output
-    out_path = memory_dir / f"{date}-summary.json"
+    # Save summary
+    output_dir = project_root / ".devmemory" / "memory"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    out_path = output_dir / f"{date}-summary.txt"
     out_path.write_text(result)
 
     return out_path

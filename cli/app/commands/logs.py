@@ -1,4 +1,3 @@
-# app/commands/logs.py
 from rich.console import Console
 from app.utils.config import LOG_FILE
 

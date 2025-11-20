@@ -1,4 +1,3 @@
-# app/commands/start.py
 import typer
 from rich.console import Console
 from pathlib import Path
