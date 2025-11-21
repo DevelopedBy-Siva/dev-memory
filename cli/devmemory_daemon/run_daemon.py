@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from devmemory_daemon.git_engine import commit_and_capture_patch
-from app.utils.config import LOG_FILE
+from app.utils.config import LOG_FILE  # global ~/.devmemory/daemon.log
 
 logging.basicConfig(
     filename=str(LOG_FILE),

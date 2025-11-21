@@ -7,7 +7,7 @@ name = "devmemory-cli"
 version = "0.2.0"
 description = "AI-powered context restoration for developers."
 authors = [{ name = "Sivasanker N P" }]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",

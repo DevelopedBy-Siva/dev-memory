@@ -9,6 +9,7 @@ from app.commands.logs import logs
 from app.commands.insight import insight_app
 from app.commands.diff import diff_app
 from app.commands.summarize import summarize_app
+from app.commands.dashboard import dashboard_app  # ✅ NEW
 
 console = Console()
 app = typer.Typer(help="DevMemory CLI")
@@ -23,3 +24,4 @@ app.command("logs")(logs)
 app.add_typer(insight_app, name="insight")
 app.add_typer(diff_app, name="diff")
 app.add_typer(summarize_app, name="summarize")
+app.add_typer(dashboard_app, name="dashboard")
