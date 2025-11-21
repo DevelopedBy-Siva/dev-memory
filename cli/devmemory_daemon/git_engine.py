@@ -1,9 +1,12 @@
-import subprocess
+import os
+import json
 from pathlib import Path
 from datetime import datetime
-import os
+import subprocess
 
 IGNORE_DIRS = {".git", ".devmemory", "__pycache__", "node_modules", "venv", ".venv"}
+
+STATE_FILE = "state.json"
 
 
 def devmemory_root(project_root: Path) -> Path:
@@ -18,46 +21,73 @@ def patches_dir(project_root: Path) -> Path:
     return devmemory_root(project_root) / "patches"
 
 
-def _gather_project_files(project_root: Path):
-    project_files = set()
-    for root, dirs, files in os.walk(project_root):
+def _load_state(project_root: Path):
+    path = devmemory_root(project_root) / STATE_FILE
+    if path.exists():
+        try:
+            return json.loads(path.read_text())
+        except Exception:
+            return {"files": {}}
+    return {"files": {}}
+
+
+def _save_state(project_root: Path, state):
+    path = devmemory_root(project_root) / STATE_FILE
+    path.write_text(json.dumps(state, indent=2))
+
+
+def _scan_project_files(project_root: Path):
+    files = {}
+    for root, dirs, filenames in os.walk(project_root):
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
         root_path = Path(root)
-        for name in files:
-            rel = (root_path / name).relative_to(project_root)
-            project_files.add(rel)
-    return project_files
+
+        for name in filenames:
+            abs_path = root_path / name
+            rel_path = abs_path.relative_to(project_root)
+
+            stat = abs_path.stat()
+            files[str(rel_path)] = {
+                "mtime": stat.st_mtime,
+                "size": stat.st_size,
+            }
+
+    return files
 
 
-def _gather_repo_files(repo: Path):
-    repo_files = set()
-    for root, dirs, files in os.walk(repo):
-        dirs[:] = [d for d in dirs if d != ".git"]
-        root_path = Path(root)
-        for name in files:
-            rel = (root_path / name).relative_to(repo)
-            repo_files.add(rel)
-    return repo_files
+def _incremental_sync(project_root: Path, repo: Path):
+    """Only copy files that changed according to state.json"""
 
+    state = _load_state(project_root)
+    old_files = state.get("files", {})
 
-def _sync_worktree(project_root: Path, repo: Path):
-    project_root = project_root.resolve()
-    repo = repo.resolve()
+    new_files = _scan_project_files(project_root)
+    changed = []
+    deleted = []
 
-    project_files = _gather_project_files(project_root)
-    repo_files = _gather_repo_files(repo)
+    for rel, meta in new_files.items():
+        if rel not in old_files:
+            changed.append(rel)
+        else:
+            old_meta = old_files[rel]
+            if old_meta["mtime"] != meta["mtime"] or old_meta["size"] != meta["size"]:
+                changed.append(rel)
 
-    for rel in project_files:
+    for rel in old_files:
+        if rel not in new_files:
+            deleted.append(rel)
+
+    for rel in changed:
         src = project_root / rel
         dst = repo / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_bytes(src.read_bytes())
 
-    for rel in repo_files:
-        if rel not in project_files:
-            if str(rel).startswith(".git"):
-                continue
-            (repo / rel).unlink(missing_ok=True)
+    for rel in deleted:
+        (repo / rel).unlink(missing_ok=True)
+
+    state["files"] = new_files
+    _save_state(project_root, state)
 
 
 def ensure_shadow_repo(project_root: Path) -> Path:
@@ -70,16 +100,13 @@ def ensure_shadow_repo(project_root: Path) -> Path:
 
     if not (repo / ".git").exists():
         subprocess.run(["git", "init"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "DevMemory"], cwd=repo)
         subprocess.run(
-            ["git", "config", "user.name", "DevMemory"], cwd=repo, check=True
-        )
-        subprocess.run(
-            ["git", "config", "user.email", "devmemory@example.com"],
-            cwd=repo,
-            check=True,
+            ["git", "config", "user.email", "devmemory@example.com"], cwd=repo
         )
 
-        _sync_worktree(project_root, repo)
+        _incremental_sync(project_root, repo)
+
         subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
         subprocess.run(
             ["git", "commit", "-m", "[DevMemory] Baseline", "--no-gpg-sign"],
@@ -94,13 +121,13 @@ def commit_and_capture_patch(project_root: Path):
     project_root = project_root.resolve()
     repo = ensure_shadow_repo(project_root)
 
-    _sync_worktree(project_root, repo)
+    _incremental_sync(project_root, repo)
 
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
 
     diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo)
     if diff.returncode == 0:
-        return
+        return  # no changes detected
 
     subprocess.run(
         ["git", "commit", "-m", "[DevMemory] Snapshot", "--no-gpg-sign"],
@@ -111,12 +138,12 @@ def commit_and_capture_patch(project_root: Path):
     commit_hash = (
         subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo).decode().strip()
     )
-
     patch_text = subprocess.check_output(
         ["git", "show", commit_hash], cwd=repo
     ).decode()
 
     pd = patches_dir(project_root)
     pd.mkdir(parents=True, exist_ok=True)
+
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     (pd / f"{ts}_{commit_hash}.patch").write_text(patch_text)
