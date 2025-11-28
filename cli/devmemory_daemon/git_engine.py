@@ -55,16 +55,21 @@ def _scan_project_files(project_root: Path):
     return files
 
 
-def _incremental_sync(project_root: Path, repo: Path):
-    """Only copy files that changed according to state.json"""
+def _incremental_sync(project_root: Path, repo: Path) -> int:
+    """
+    Only copy files that changed according to state.json.
 
+    Returns:
+        int: number of files changed (added/updated/deleted).
+    """
     state = _load_state(project_root)
     old_files = state.get("files", {})
 
     new_files = _scan_project_files(project_root)
-    changed = []
-    deleted = []
+    changed: list[str] = []
+    deleted: list[str] = []
 
+    # detect added/modified
     for rel, meta in new_files.items():
         if rel not in old_files:
             changed.append(rel)
@@ -73,10 +78,12 @@ def _incremental_sync(project_root: Path, repo: Path):
             if old_meta["mtime"] != meta["mtime"] or old_meta["size"] != meta["size"]:
                 changed.append(rel)
 
+    # detect deleted
     for rel in old_files:
         if rel not in new_files:
             deleted.append(rel)
 
+    # apply changes to shadow repo
     for rel in changed:
         src = project_root / rel
         dst = repo / rel
@@ -86,8 +93,11 @@ def _incremental_sync(project_root: Path, repo: Path):
     for rel in deleted:
         (repo / rel).unlink(missing_ok=True)
 
+    # persist new state
     state["files"] = new_files
     _save_state(project_root, state)
+
+    return len(changed) + len(deleted)
 
 
 def ensure_shadow_repo(project_root: Path) -> Path:
@@ -117,17 +127,28 @@ def ensure_shadow_repo(project_root: Path) -> Path:
     return repo
 
 
-def commit_and_capture_patch(project_root: Path):
+def commit_and_capture_patch(project_root: Path) -> bool:
+    """
+    Perform incremental sync, commit if there are changes, and capture patch.
+
+    Returns:
+        bool: True if a new snapshot (commit + patch) was created, False otherwise.
+    """
     project_root = project_root.resolve()
     repo = ensure_shadow_repo(project_root)
 
-    _incremental_sync(project_root, repo)
+    changed_count = _incremental_sync(project_root, repo)
+
+    # No file-level changes → no snapshot needed
+    if changed_count == 0:
+        return False
 
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
 
     diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo)
     if diff.returncode == 0:
-        return  # no changes detected
+        # Nothing staged → no commit
+        return False
 
     subprocess.run(
         ["git", "commit", "-m", "[DevMemory] Snapshot", "--no-gpg-sign"],
@@ -145,5 +166,7 @@ def commit_and_capture_patch(project_root: Path):
     pd = patches_dir(project_root)
     pd.mkdir(parents=True, exist_ok=True)
 
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now().strftime("%Y%m%dT%H%M%SZ")
     (pd / f"{ts}_{commit_hash}.patch").write_text(patch_text)
+
+    return True

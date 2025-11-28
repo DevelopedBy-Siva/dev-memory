@@ -37,14 +37,42 @@ def main():
     project_root = Path(sys.argv[1]).resolve()
     os.chdir(project_root)
 
+    # Lower priority so it doesn't fight with your editor / shell
+    try:
+        os.nice(10)
+    except Exception:
+        pass
+
     log.info(f"Starting DevMemory for {project_root}")
 
+    # Adaptive interval parameters (overridable via env)
+    min_interval = float(os.environ.get("DEVMEMORY_INTERVAL_MIN", "2"))
+    max_interval = float(os.environ.get("DEVMEMORY_INTERVAL_MAX", "30"))
+    backoff_factor = float(os.environ.get("DEVMEMORY_INTERVAL_BACKOFF", "1.7"))
+
+    interval = min_interval
+
     while running:
+        start = time.time()
+
         try:
-            commit_and_capture_patch(project_root)
+            did_snapshot = commit_and_capture_patch(project_root)
         except Exception as e:
+            did_snapshot = False
             log.exception(f"Error during snapshot: {e}")
-        time.sleep(2)
+
+        # Feedback: if we had a snapshot, stay fast; if not, back off
+        if did_snapshot:
+            interval = min_interval
+            log.info(f"Snapshot captured. Reset interval to {interval:.2f}s")
+        else:
+            interval = min(max_interval, interval * backoff_factor)
+            log.debug(f"No changes. Backing off to {interval:.2f}s")
+
+        elapsed = time.time() - start
+        sleep_for = max(0.0, interval - elapsed)
+        if sleep_for > 0:
+            time.sleep(sleep_for)
 
     log.info("DevMemory daemon stopped cleanly.")
 

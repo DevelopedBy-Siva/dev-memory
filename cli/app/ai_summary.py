@@ -1,3 +1,4 @@
+import os
 import json
 from pathlib import Path
 from typing import List, Dict, Iterable
@@ -6,7 +7,9 @@ import google.generativeai as genai
 from devmemory_daemon.git_engine import patches_dir  # ✅ use patches_dir
 from app.utils.pidfile import get_running_project_root
 
-genai.configure(api_key="AIzaSyA9ISVUaLS-LWiq01IOKosIs2Fgv7DN930")
+api_key = os.environ.get("GENAI_KEY")
+genai.configure(api_key=api_key)
+
 MODEL_NAME = "gemini-2.5-flash"
 
 

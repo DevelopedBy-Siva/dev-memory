@@ -9,13 +9,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
-
-// Don't import store here - let components handle their own data loading
-onMounted(() => {
-  // Components will load their own data
-})
 </script>
 
 <style>

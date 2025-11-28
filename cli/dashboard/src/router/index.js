@@ -1,6 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import ContextView from '@/components/ContextView.vue'
-import PatchesView from '@/components/PatchesView.vue'
 import SessionsView from '@/components/SessionsView.vue'
 
 const router = createRouter({
@@ -8,27 +6,15 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'context',
-      component: ContextView,
-      meta: { title: 'Context Restoration' }
-    },
-    {
-      path: '/patches',
-      name: 'patches',
-      component: PatchesView,
-      meta: { title: 'Patches' }
-    },
-    {
-      path: '/sessions',
       name: 'sessions',
       component: SessionsView,
-      meta: { title: 'Coding Sessions' }
+      meta: { title: 'Sessions' }
     }
   ]
 })
 
 router.beforeEach((to, from, next) => {
-  document.title = `${to.meta.title || 'DevMemory'} | DevMemory Dashboard`
+  document.title = `${to.meta.title || 'DevMemory'} | DevMemory`
   next()
 })
 

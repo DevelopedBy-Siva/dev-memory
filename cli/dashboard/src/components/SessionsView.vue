@@ -1,263 +1,357 @@
+<!-- src/components/SessionsView.vue -->
 <template>
-  <div class="space-y-4">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h2 class="text-2xl font-bold text-white">Coding Sessions</h2>
-        <p class="text-sm text-slate-500 mt-1">
-          Sessions are automatically grouped when you take breaks longer than 30
-          minutes
+  <section>
+    <!-- Loading / error states -->
+    <div v-if="loading" class="flex items-center justify-center py-16">
+      <div class="flex items-center space-x-3 text-slate-300">
+        <span class="w-3 h-3 rounded-full bg-blue-500 animate-ping"></span>
+        <span class="text-sm">Loading sessions…</span>
+      </div>
+    </div>
+
+    <div v-else-if="error" class="py-8">
+      <div
+        class="rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-100"
+      >
+        {{ error }}
+      </div>
+    </div>
+
+    <div v-else>
+      <!-- Empty state -->
+      <div
+        v-if="sessions.length === 0"
+        class="py-12 text-center text-slate-400"
+      >
+        <p class="text-sm">
+          No sessions yet. Start DevMemory in a project and come back here.
         </p>
       </div>
-      <div
-        class="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg"
-      >
-        <span class="text-sm text-slate-400">Total Sessions:</span>
-        <span class="ml-2 text-lg font-bold text-blue-300">{{
-          store.sessions.length
-        }}</span>
-      </div>
-    </div>
 
-    <!-- Loading State -->
-    <div
-      v-if="store.loading && !store.sessions.length"
-      class="card p-12 text-center"
-    >
-      <svg
-        class="w-12 h-12 text-slate-400 animate-spin mx-auto mb-4"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-        />
-      </svg>
-      <p class="text-slate-400">Loading sessions...</p>
-    </div>
+      <!-- Sessions list -->
+      <div v-else class="space-y-4">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-lg font-semibold text-slate-100">Sessions</h2>
+          <p class="text-xs text-slate-500">
+            Showing {{ sessions.length }} session{{
+              sessions.length === 1 ? "" : "s"
+            }}
+          </p>
+        </div>
 
-    <!-- Empty State -->
-    <div v-else-if="!store.sessions.length" class="card p-12 text-center">
-      <div
-        class="inline-flex items-center justify-center w-16 h-16 bg-slate-700/30 rounded-full mb-4"
-      >
-        <svg
-          class="w-8 h-8 text-slate-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      </div>
-      <p class="text-lg text-slate-400 mb-2">No coding sessions yet</p>
-      <p class="text-sm text-slate-600">
-        Start coding and DevMemory will track your sessions
-      </p>
-    </div>
+        <div class="space-y-3">
+          <article
+            v-for="session in sessions"
+            :key="session.session_id"
+            class="rounded-xl border border-slate-700/60 bg-slate-900/60 shadow-sm hover:border-slate-500/70 transition-colors"
+          >
+            <!-- Session header row -->
+            <button
+              class="w-full flex items-center justify-between px-4 py-3 text-left"
+              @click="toggleSession(session.session_id)"
+            >
+              <div class="flex items-center space-x-3">
+                <span
+                  class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium"
+                  :class="
+                    session.status === 'active'
+                      ? 'bg-green-500/20 text-green-300'
+                      : 'bg-slate-700/60 text-slate-300'
+                  "
+                >
+                  {{ session.status === "active" ? "LIVE" : "DONE" }}
+                </span>
+                <div>
+                  <p
+                    class="text-sm font-medium text-slate-100 truncate max-w-md"
+                  >
+                    {{ session.context || "No context provided" }}
+                  </p>
+                  <p class="text-xs text-slate-500 mt-1">
+                    Started: {{ formatDateTime(session.started_at) }}
+                    <span v-if="session.stopped_at">
+                      • Ended: {{ formatDateTime(session.stopped_at) }}
+                    </span>
+                  </p>
+                </div>
+              </div>
 
-    <!-- Sessions List -->
-    <div v-else class="space-y-4">
-      <div
-        v-for="(session, idx) in store.sessions"
-        :key="idx"
-        class="card p-6 hover:border-blue-500/30 transition-all cursor-pointer group"
-      >
-        <div class="flex items-start justify-between mb-4">
-          <!-- Session Info -->
-          <div class="flex-1">
-            <div class="flex items-center space-x-3 mb-2">
+              <div class="flex items-center space-x-4 text-xs text-slate-400">
+                <span class="flex items-center space-x-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                  <span>{{ session.notes?.length || 0 }} notes</span>
+                </span>
+                <span
+                  v-if="session.patch_count != null"
+                  class="flex items-center space-x-1"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  <span>{{ session.patch_count }} snapshots</span>
+                </span>
+                <svg
+                  class="w-4 h-4 text-slate-400 transform transition-transform"
+                  :class="expandedId === session.session_id ? 'rotate-90' : ''"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </div>
+            </button>
+
+            <!-- Expanded details -->
+            <div
+              v-if="expandedId === session.session_id"
+              class="border-t border-slate-700/70 bg-slate-950/60 px-4 py-4 text-sm text-slate-200"
+            >
+              <!-- If we have full detail loaded for this session_id, use it -->
               <div
-                class="p-2 bg-purple-500/10 rounded-lg group-hover:bg-purple-500/20 transition-colors"
+                v-if="
+                  selectedSession &&
+                  selectedSession.session_id === session.session_id
+                "
               >
-                <svg
-                  class="w-5 h-5 text-purple-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+                <!-- Notes -->
+                <div class="mb-4">
+                  <h3
+                    class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2"
+                  >
+                    Notes
+                  </h3>
+                  <div
+                    v-if="selectedSession.notes && selectedSession.notes.length"
+                    class="space-y-2"
+                  >
+                    <div
+                      v-for="(note, idx) in selectedSession.notes"
+                      :key="idx"
+                      class="flex items-start space-x-2"
+                    >
+                      <div class="mt-1">
+                        <span
+                          class="w-1.5 h-1.5 rounded-full bg-blue-400 block"
+                        ></span>
+                      </div>
+                      <div>
+                        <p class="text-xs text-slate-500 mb-0.5">
+                          {{ note.time || formatTime(note.timestamp) }}
+                        </p>
+                        <p class="text-sm text-slate-100">
+                          {{ note.text }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p v-else class="text-xs text-slate-500">
+                    No notes in this session.
+                  </p>
+                </div>
+
+                <!-- Patches summary -->
+                <div class="mb-4">
+                  <h3
+                    class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2"
+                  >
+                    Snapshots in this session
+                  </h3>
+                  <div
+                    v-if="
+                      selectedSession.patches && selectedSession.patches.length
+                    "
+                    class="space-y-1.5"
+                  >
+                    <p class="text-xs text-slate-500 mb-1">
+                      {{ selectedSession.patches.length }} snapshots captured
+                    </p>
+                    <ul
+                      class="text-xs text-slate-400 space-y-0.5 max-h-32 overflow-auto pr-1"
+                    >
+                      <li
+                        v-for="p in selectedSession.patches.slice(0, 10)"
+                        :key="p.file"
+                        class="flex items-center justify-between"
+                      >
+                        <span class="truncate max-w-xs">
+                          {{ p.time }} • {{ p.commit.slice(0, 8) }}
+                        </span>
+                        <span class="truncate max-w-xs text-slate-500">
+                          {{ p.file }}
+                        </span>
+                      </li>
+                    </ul>
+                    <p
+                      v-if="selectedSession.patches.length > 10"
+                      class="text-[11px] text-slate-500 mt-1"
+                    >
+                      (+{{ selectedSession.patches.length - 10 }} more…)
+                    </p>
+                  </div>
+                  <p v-else class="text-xs text-slate-500">
+                    No patches found for this session window.
+                  </p>
+                </div>
+
+                <!-- AI summary -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <h3
+                      class="text-xs font-semibold uppercase tracking-wide text-slate-400"
+                    >
+                      AI Summary
+                    </h3>
+                    <button
+                      class="inline-flex items-center px-2 py-1 rounded-md text-[11px] border border-sky-500/60 text-sky-200 hover:bg-sky-500/10 disabled:opacity-50"
+                      :disabled="summaryLoading"
+                      @click.stop="loadSummary(selectedSession.session_id)"
+                    >
+                      <span v-if="summaryLoading">Summarizing…</span>
+                      <span v-else>Get Summary</span>
+                    </button>
+                  </div>
+
+                  <div v-if="summaryError" class="text-xs text-red-300 mb-2">
+                    {{ summaryError }}
+                  </div>
+
+                  <div
+                    v-if="
+                      summary && summaryForId === selectedSession.session_id
+                    "
+                    class="text-xs leading-relaxed text-slate-200 whitespace-pre-wrap bg-slate-900/80 border border-slate-700/70 rounded-lg px-3 py-2"
+                  >
+                    {{ summary.summary || summary }}
+                  </div>
+
+                  <p v-else class="text-xs text-slate-500">
+                    Click "Get Summary" to generate an AI summary for this
+                    session.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 class="text-lg font-semibold text-white">
-                  Session {{ store.sessions.length - idx }}
-                </h3>
-                <p class="text-sm text-slate-400">
-                  {{ formatSessionTime(session) }}
-                </p>
+
+              <!-- Loading state for selected session -->
+              <div v-else class="text-xs text-slate-400">
+                Loading session details…
               </div>
             </div>
-
-            <div class="flex items-center space-x-4 text-sm">
-              <div class="flex items-center space-x-2">
-                <svg
-                  class="w-4 h-4 text-slate-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span class="text-slate-400">{{
-                  calculateDuration(session)
-                }}</span>
-              </div>
-              <div class="flex items-center space-x-2">
-                <svg
-                  class="w-4 h-4 text-slate-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                <span class="text-slate-400"
-                  >{{ session.patches }} snapshots</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <!-- Session Stats -->
-          <div class="text-right">
-            <div
-              class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg border border-blue-500/20"
-            >
-              <span class="text-2xl font-bold text-white">{{
-                session.patches
-              }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Commits Preview -->
-        <div
-          class="flex items-center space-x-2 mt-4 pt-4 border-t border-slate-700/50"
-        >
-          <span class="text-xs text-slate-500">Recent commits:</span>
-          <div class="flex flex-wrap gap-2">
-            <span
-              v-for="commit in session.commits"
-              :key="commit"
-              class="px-2 py-1 bg-slate-900/50 text-slate-400 rounded text-xs font-mono hover:bg-slate-700/50 transition-colors"
-            >
-              {{ commit }}
-            </span>
-            <span
-              v-if="session.patches > 3"
-              class="px-2 py-1 text-xs text-slate-500"
-            >
-              +{{ session.patches - 3 }} more
-            </span>
-          </div>
-        </div>
-
-        <!-- Timeline Indicator -->
-        <div class="mt-4 pt-4 border-t border-slate-700/50">
-          <div class="flex items-center space-x-2">
-            <div
-              class="flex-1 h-2 bg-slate-700/30 rounded-full overflow-hidden"
-            >
-              <div
-                class="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
-                :style="{ width: calculateIntensity(session) + '%' }"
-              ></div>
-            </div>
-            <span class="text-xs text-slate-500 whitespace-nowrap">
-              {{ calculateIntensity(session) }}% active
-            </span>
-          </div>
+          </article>
         </div>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup>
-import { useDevMemoryStore } from "@/stores/devmemory";
+import { ref, onMounted } from "vue";
 
-const store = useDevMemoryStore();
+const apiUrl = window.DEVMEMORY_CONFIG?.API_URL || "http://127.0.0.1:8000";
 
-const formatSessionTime = (session) => {
-  const start = new Date(session.start);
-  const end = new Date(session.end);
+const loading = ref(true);
+const error = ref(null);
 
-  const formatTime = (date) => {
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+const sessions = ref([]); // list from /api/sessions
+const expandedId = ref(null); // which card is expanded
+const selectedSession = ref(null); // detail from /api/session/{id}
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  };
+const summary = ref(null); // AI summary payload
+const summaryForId = ref(null); // which session the summary belongs to
+const summaryLoading = ref(false);
+const summaryError = ref(null);
 
-  // If same day, show date once
-  if (start.toDateString() === end.toDateString()) {
-    return `${formatDate(start)} • ${formatTime(start)} → ${formatTime(end)}`;
+function formatDateTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString();
+}
+
+function formatTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleTimeString();
+}
+
+async function fetchSessions() {
+  loading.value = true;
+  error.value = null;
+
+  try {
+    const res = await fetch(`${apiUrl}/api/sessions`);
+    if (!res.ok) {
+      throw new Error(`Failed to load sessions (${res.status})`);
+    }
+    const data = await res.json();
+    sessions.value = data.sessions || [];
+  } catch (err) {
+    console.error("Error loading sessions:", err);
+    error.value = err.message || "Failed to load sessions.";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadSessionDetail(sessionId) {
+  selectedSession.value = null;
+  summary.value = null;
+  summaryForId.value = null;
+  summaryError.value = null;
+
+  try {
+    const res = await fetch(
+      `${apiUrl}/api/session/${encodeURIComponent(sessionId)}`
+    );
+    if (!res.ok) {
+      throw new Error(`Failed to load session ${sessionId} (${res.status})`);
+    }
+    const data = await res.json();
+    selectedSession.value = data;
+  } catch (err) {
+    console.error("Error loading session detail:", err);
+    summaryError.value = "Could not load this session.";
+  }
+}
+
+function toggleSession(sessionId) {
+  if (expandedId.value === sessionId) {
+    expandedId.value = null;
+    return;
   }
 
-  return `${formatDate(start)} ${formatTime(start)} → ${formatDate(
-    end
-  )} ${formatTime(end)}`;
-};
+  expandedId.value = sessionId;
+  loadSessionDetail(sessionId);
+}
 
-const calculateDuration = (session) => {
-  const start = new Date(session.start);
-  const end = new Date(session.end);
-  const diffMs = end - start;
+async function loadSummary(sessionId) {
+  summaryLoading.value = true;
+  summaryError.value = null;
+  summary.value = null;
+  summaryForId.value = null;
 
-  const minutes = Math.floor(diffMs / 60000);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) {
-    const remainingMins = minutes % 60;
-    return `${hours}h ${remainingMins}m`;
+  try {
+    const res = await fetch(
+      `${apiUrl}/api/session/${encodeURIComponent(sessionId)}/summary`
+    );
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Summary failed (${res.status}): ${txt}`);
+    }
+    const data = await res.json();
+    summary.value = data;
+    summaryForId.value = sessionId;
+  } catch (err) {
+    console.error("Error loading summary:", err);
+    summaryError.value = err.message || "Failed to generate summary.";
+  } finally {
+    summaryLoading.value = false;
   }
+}
 
-  return `${minutes}m`;
-};
-
-const calculateIntensity = (session) => {
-  // Calculate "intensity" based on patches per minute
-  const start = new Date(session.start);
-  const end = new Date(session.end);
-  const durationMinutes = (end - start) / 60000;
-
-  if (durationMinutes === 0) return 100;
-
-  const patchesPerMinute = session.patches / durationMinutes;
-
-  // Scale to percentage (max 1 patch/minute = 100%)
-  return Math.min(Math.round(patchesPerMinute * 100), 100);
-};
+onMounted(() => {
+  fetchSessions();
+});
 </script>
