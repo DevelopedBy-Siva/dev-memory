@@ -18,6 +18,89 @@
     </div>
 
     <div v-else>
+      <!-- Insights -->
+      <section class="mb-8" v-if="sessions.length > 0">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-semibold text-slate-100">Memory Insights</h2>
+          <p class="text-xs text-slate-500">
+            Last {{ insights?.window_days || 30 }} days
+          </p>
+        </div>
+
+        <div v-if="insightsError" class="text-xs text-red-300 mb-2">
+          {{ insightsError }}
+        </div>
+
+        <div v-if="insights" class="grid md:grid-cols-3 gap-4">
+          <!-- Streaks -->
+          <div
+            class="bg-slate-900/70 border border-slate-700/70 rounded-xl p-4"
+          >
+            <h3 class="text-xs font-semibold text-slate-300 mb-2">Streaks</h3>
+            <div class="text-3xl font-bold text-slate-50">
+              {{ insights.current_streak
+              }}<span class="text-base text-slate-400 ml-1">d</span>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-1">Current streak</div>
+            <div class="text-[11px] text-slate-500 mt-2">
+              Longest streak:
+              <span class="text-slate-200"
+                >{{ insights.longest_streak }} days</span
+              >
+            </div>
+          </div>
+
+          <!-- Hot files -->
+          <div
+            class="bg-slate-900/70 border border-slate-700/70 rounded-xl p-4"
+          >
+            <h3 class="text-xs font-semibold text-slate-300 mb-2">
+              Top edited files
+            </h3>
+            <ul class="space-y-1 max-h-40 overflow-auto">
+              <li
+                v-for="hf in insights.hot_files"
+                :key="hf.file"
+                class="flex justify-between text-[11px] text-slate-300"
+              >
+                <span class="truncate font-mono">{{ hf.file }}</span>
+                <span class="text-slate-400">{{ hf.edits }} edits</span>
+              </li>
+              <li
+                v-if="insights.hot_files.length === 0"
+                class="text-[11px] text-slate-500"
+              >
+                No file activity yet.
+              </li>
+            </ul>
+          </div>
+
+          <!-- Activity heatmap -->
+          <div
+            class="bg-slate-900/70 border border-slate-700/70 rounded-xl p-4"
+          >
+            <h3 class="text-xs font-semibold text-slate-300 mb-2">Activity</h3>
+            <div class="flex flex-wrap gap-1">
+              <div
+                v-for="day in insights.activity"
+                :key="day.date"
+                class="w-3 h-3 rounded-sm"
+                :class="{
+                  'bg-slate-700': day.count === 0,
+                  'bg-sky-900': day.count === 1,
+                  'bg-sky-600': day.count === 2,
+                  'bg-sky-400': day.count >= 3,
+                }"
+                :title="`${day.date}: ${day.count} snapshots`"
+              ></div>
+            </div>
+            <div class="text-[10px] text-slate-500 mt-2">
+              One square = 1 day
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Empty state -->
       <div
         v-if="sessions.length === 0"
@@ -47,61 +130,84 @@
           >
             <!-- Session header row -->
             <button
-              class="w-full flex items-center justify-between px-4 py-3 text-left"
+              class="w-full flex flex-col gap-3 px-4 py-3 text-left"
               @click="toggleSession(session.session_id)"
             >
-              <div class="flex items-center space-x-3">
-                <span
-                  class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium"
-                  :class="
-                    session.status === 'active'
-                      ? 'bg-green-500/20 text-green-300'
-                      : 'bg-slate-700/60 text-slate-300'
-                  "
-                >
-                  {{ session.status === "active" ? "LIVE" : "DONE" }}
-                </span>
-                <div>
-                  <p
-                    class="text-sm font-medium text-slate-100 truncate max-w-md"
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                  <span
+                    class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium"
+                    :class="
+                      session.status === 'active'
+                        ? 'bg-green-500/20 text-green-300'
+                        : 'bg-slate-700/60 text-slate-300'
+                    "
                   >
-                    {{ session.context || "No context provided" }}
-                  </p>
-                  <p class="text-xs text-slate-500 mt-1">
-                    Started: {{ formatDateTime(session.started_at) }}
-                    <span v-if="session.stopped_at">
-                      • Ended: {{ formatDateTime(session.stopped_at) }}
-                    </span>
-                  </p>
+                    {{ session.status === "active" ? "LIVE" : "DONE" }}
+                  </span>
+                  <div>
+                    <p
+                      class="text-sm font-medium text-slate-100 truncate max-w-md"
+                    >
+                      {{ session.context || "No context provided" }}
+                    </p>
+                    <p class="text-xs text-slate-500 mt-1">
+                      Started: {{ formatDateTime(session.started_at) }}
+                      <span v-if="session.stopped_at">
+                        • Ended: {{ formatDateTime(session.stopped_at) }}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-4 text-xs text-slate-400">
+                  <span class="flex items-center space-x-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                    <span>{{ session.notes?.length || 0 }} notes</span>
+                  </span>
+                  <span
+                    v-if="session.patch_count != null"
+                    class="flex items-center space-x-1"
+                  >
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                    <span>{{ session.patch_count }} snapshots</span>
+                  </span>
+                  <svg
+                    class="w-4 h-4 text-slate-400 transform transition-transform"
+                    :class="
+                      expandedId === session.session_id ? 'rotate-90' : ''
+                    "
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
                 </div>
               </div>
 
-              <div class="flex items-center space-x-4 text-xs text-slate-400">
-                <span class="flex items-center space-x-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
-                  <span>{{ session.notes?.length || 0 }} notes</span>
-                </span>
-                <span
-                  v-if="session.patch_count != null"
-                  class="flex items-center space-x-1"
+              <!-- Timeline -->
+              <div v-if="session.patch_count" class="mt-1">
+                <div class="text-[11px] text-slate-500 mb-1">Timeline</div>
+                <div
+                  class="relative h-2 bg-slate-800 rounded-full overflow-hidden"
                 >
-                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                  <span>{{ session.patch_count }} snapshots</span>
-                </span>
-                <svg
-                  class="w-4 h-4 text-slate-400 transform transition-transform"
-                  :class="expandedId === session.session_id ? 'rotate-90' : ''"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
+                  <div
+                    class="absolute inset-y-0 left-0 right-0 bg-slate-700/60"
+                  ></div>
+                  <div
+                    v-for="pt in getTimelinePoints(session)"
+                    :key="pt.file"
+                    class="absolute -top-1 w-2 h-2 rounded-full bg-sky-400 shadow"
+                    :style="{ left: `calc(${pt.ratio * 100}% - 4px)` }"
+                    :title="`${pt.time} • ${pt.commit.slice(0, 8)}`"
+                  ></div>
+                </div>
               </div>
             </button>
 
@@ -170,19 +276,27 @@
                       {{ selectedSession.patches.length }} snapshots captured
                     </p>
                     <ul
-                      class="text-xs text-slate-400 space-y-0.5 max-h-32 overflow-auto pr-1"
+                      class="text-xs text-slate-400 space-y-1 max-h-40 overflow-auto pr-1"
                     >
                       <li
                         v-for="p in selectedSession.patches.slice(0, 10)"
                         :key="p.file"
-                        class="flex items-center justify-between"
+                        class="flex items-center justify-between gap-2"
                       >
-                        <span class="truncate max-w-xs">
-                          {{ p.time }} • {{ p.commit.slice(0, 8) }}
-                        </span>
-                        <span class="truncate max-w-xs text-slate-500">
-                          {{ p.file }}
-                        </span>
+                        <div class="flex flex-col">
+                          <span class="text-slate-200">
+                            {{ p.time }} • {{ p.commit.slice(0, 8) }}
+                          </span>
+                          <span class="truncate max-w-xs text-slate-500">
+                            {{ p.file }}
+                          </span>
+                        </div>
+                        <button
+                          class="text-[11px] px-2 py-1 rounded-md border border-slate-600 text-slate-200 hover:bg-slate-800"
+                          @click.stop="openPatch(p.file)"
+                        >
+                          View diff
+                        </button>
                       </li>
                     </ul>
                     <p
@@ -244,6 +358,43 @@
         </div>
       </div>
     </div>
+
+    <!-- Patch diff modal -->
+    <div
+      v-if="showPatchModal"
+      class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+    >
+      <div
+        class="bg-slate-900 border border-slate-700 rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col"
+      >
+        <div
+          class="flex items-center justify-between px-4 py-3 border-b border-slate-700"
+        >
+          <div class="text-xs text-slate-200 font-mono truncate max-w-md">
+            {{ selectedPatchFile }}
+          </div>
+          <button
+            class="text-xs text-slate-400 hover:text-slate-100"
+            @click="showPatchModal = false"
+          >
+            Close
+          </button>
+        </div>
+        <div class="flex-1 overflow-auto bg-slate-950">
+          <div v-if="patchLoading" class="p-4 text-sm text-slate-300">
+            Loading diff...
+          </div>
+          <div v-else-if="patchError" class="p-4 text-sm text-red-400">
+            {{ patchError }}
+          </div>
+          <pre
+            v-else
+            class="p-4 text-xs font-mono text-slate-100 whitespace-pre-wrap"
+            >{{ selectedPatchText }}</pre
+          >
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -255,14 +406,23 @@ const apiUrl = window.DEVMEMORY_CONFIG?.API_URL || "http://127.0.0.1:8000";
 const loading = ref(true);
 const error = ref(null);
 
-const sessions = ref([]); // list from /api/sessions
-const expandedId = ref(null); // which card is expanded
-const selectedSession = ref(null); // detail from /api/session/{id}
+const sessions = ref([]);
+const expandedId = ref(null);
+const selectedSession = ref(null);
 
-const summary = ref(null); // AI summary payload
-const summaryForId = ref(null); // which session the summary belongs to
+const summary = ref(null);
+const summaryForId = ref(null);
 const summaryLoading = ref(false);
 const summaryError = ref(null);
+
+const selectedPatchFile = ref(null);
+const selectedPatchText = ref("");
+const patchLoading = ref(false);
+const patchError = ref(null);
+const showPatchModal = ref(false);
+
+const insights = ref(null);
+const insightsError = ref(null);
 
 function formatDateTime(iso) {
   if (!iso) return "—";
@@ -276,7 +436,7 @@ function formatTime(iso) {
   return d.toLocaleTimeString();
 }
 
-async function fetchSessions() {
+async function loadSessions() {
   loading.value = true;
   error.value = null;
 
@@ -351,7 +511,61 @@ async function loadSummary(sessionId) {
   }
 }
 
+async function openPatch(patchFile) {
+  patchLoading.value = true;
+  patchError.value = null;
+  selectedPatchFile.value = patchFile;
+  selectedPatchText.value = "";
+  showPatchModal.value = true;
+
+  try {
+    const res = await fetch(
+      `${apiUrl}/api/patch/${encodeURIComponent(patchFile)}`
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to load patch (${res.status}): ${text}`);
+    }
+    const text = await res.text();
+    selectedPatchText.value = text;
+  } catch (err) {
+    console.error("Error loading patch:", err);
+    patchError.value = err.message || "Failed to load patch";
+  } finally {
+    patchLoading.value = false;
+  }
+}
+
+function getTimelinePoints(session) {
+  if (!session.patches || session.patches.length === 0) return [];
+
+  const start = new Date(session.started_at).getTime();
+  const end = new Date(session.stopped_at || Date.now()).getTime();
+  if (end <= start) return [];
+
+  return session.patches.map((p) => {
+    const t = new Date(p.datetime).getTime();
+    const ratio = Math.min(1, Math.max(0, (t - start) / (end - start)));
+    return { ...p, ratio };
+  });
+}
+
+async function loadInsights() {
+  insightsError.value = null;
+  try {
+    const res = await fetch(`${apiUrl}/api/insights?days=30`);
+    if (!res.ok) {
+      throw new Error(`Failed to load insights (${res.status})`);
+    }
+    insights.value = await res.json();
+  } catch (err) {
+    console.error("Error loading insights:", err);
+    insightsError.value = err.message || "Failed to load insights";
+  }
+}
+
 onMounted(() => {
-  fetchSessions();
+  loadSessions();
+  loadInsights();
 });
 </script>

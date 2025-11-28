@@ -5,19 +5,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Optional
-import re
 from collections import Counter
-from heapq import nlargest  # For hot files priority queue
 
 from devmemory_daemon.git_engine import patches_dir, devmemory_root
 from app.utils.pidfile import get_running_project_root
 from fastapi.responses import PlainTextResponse
 
-# Gemini AI
 try:
     import google.generativeai as genai
 
-    api_key = os.environ.get("GENAI_KEY", "")
+    api_key = os.environ.get("GENAI_KEY")
     genai.configure(api_key=api_key)
     AI_AVAILABLE = True
 except Exception:
@@ -32,12 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# ===== Trie for Efficient Search (FAANG DS) =====
-
-
-# ===== Helper Functions =====
 
 
 def _summarize_session_with_ai(session_data: dict) -> dict:
@@ -219,7 +210,7 @@ def root():
     return {
         "message": "DevMemory API",
         "version": "3.0.0",
-        "features": ["session_context", "notes", "trie_search"],
+        "features": ["session_context", "notes", "ai_summary", "insights"],
     }
 
 
@@ -302,6 +293,92 @@ def list_sessions():
         sessions.insert(0, current)
 
     return {"sessions": sessions, "total": len(sessions)}
+
+
+@app.get("/api/insights")
+def get_insights(days: int = 30):
+    """
+    Memory insights:
+    - most edited files (top N)
+    - streaks
+    - activity heatmap
+    """
+    project_root = get_running_project_root()
+    if not project_root:
+        raise HTTPException(status_code=503, detail="DevMemory not running")
+
+    patches = get_patches_list(project_root)
+
+    # Filter by last N days
+    cutoff = datetime.now() - timedelta(days=days)
+    recent = [p for p in patches if datetime.fromisoformat(p["datetime"]) >= cutoff]
+
+    # 1) Most edited files
+    pd = patches_dir(project_root)
+    file_counter = Counter()
+    date_counter = Counter()
+
+    for p in recent:
+        date_counter[p["date"]] += 1
+        patch_file = pd / p["file"]
+        if not patch_file.exists():
+            continue
+        content = patch_file.read_text()
+        for line in content.split("\n"):
+            if line.startswith("diff --git"):
+                parts = line.split()
+                if len(parts) >= 3:
+                    fname = parts[-1].replace("b/", "")
+                    file_counter[fname] += 1
+
+    hot_files = [{"file": f, "edits": c} for f, c in file_counter.most_common(10)]
+
+    # 2) Streaks (days with any patches)
+    # Build a sorted list of unique dates
+    all_dates = sorted(set(date_counter.keys()))
+    # Compute streaks
+    longest_streak = 0
+    current_streak = 0
+    last_date = None
+
+    for dstr in all_dates:
+        d = datetime.strptime(dstr, "%Y-%m-%d").date()
+        if last_date is None:
+            current_streak = 1
+        else:
+            if d == last_date + timedelta(days=1):
+                current_streak += 1
+            else:
+                longest_streak = max(longest_streak, current_streak)
+                current_streak = 1
+        last_date = d
+
+    longest_streak = max(longest_streak, current_streak)
+
+    # Current streak: count backwards from today
+    today = datetime.now().date()
+    cur_streak = 0
+    day = today
+    while True:
+        key = day.strftime("%Y-%m-%d")
+        if key in date_counter:
+            cur_streak += 1
+            day = day - timedelta(days=1)
+        else:
+            break
+
+    # 3) Activity heatmap (per day counts)
+    heatmap = [
+        {"date": d, "count": date_counter[d]} for d in sorted(date_counter.keys())
+    ]
+
+    return {
+        "hot_files": hot_files,
+        "longest_streak": longest_streak,
+        "current_streak": cur_streak,
+        "activity": heatmap,
+        "window_days": days,
+    }
 
 
 @app.get("/api/session/{session_id}")
