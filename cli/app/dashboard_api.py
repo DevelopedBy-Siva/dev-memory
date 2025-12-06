@@ -14,7 +14,7 @@ from fastapi.responses import PlainTextResponse
 try:
     import google.generativeai as genai
 
-    api_key = os.environ.get("GENAI_KEY")
+    api_key = os.environ.get("GENAI_KEY", "AIzaSyDT0Y3z_pO47ElDyIBDGDwTGRHLsDutX04")
     genai.configure(api_key=api_key)
     AI_AVAILABLE = True
 except Exception:

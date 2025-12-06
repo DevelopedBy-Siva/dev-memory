@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Iterable
 
 import google.generativeai as genai
-from devmemory_daemon.git_engine import patches_dir  # ✅ use patches_dir
+from devmemory_daemon.git_engine import patches_dir
 from app.utils.pidfile import get_running_project_root
 
 api_key = os.environ.get("GENAI_KEY")

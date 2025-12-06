@@ -21,8 +21,13 @@
       <!-- Insights -->
       <section class="mb-8" v-if="sessions.length > 0">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold text-slate-100">Memory Insights</h2>
-          <p class="text-xs text-slate-500">
+          <h2
+            style="margin-top: 50px; color: #fff; font-size: 28px"
+            class="text-lg font-semibold text-slate-100"
+          >
+            Memory Insights
+          </h2>
+          <p style="color: #d8d8d8" class="text-xs text-slate-400">
             Last {{ insights?.window_days || 30 }} days
           </p>
         </div>
@@ -34,17 +39,30 @@
         <div v-if="insights" class="grid md:grid-cols-3 gap-4">
           <!-- Streaks -->
           <div
+            style="border-radius: 10px; border-color: grey"
             class="bg-slate-900/70 border border-slate-700/70 rounded-xl p-4"
           >
-            <h3 class="text-xs font-semibold text-slate-300 mb-2">Streaks</h3>
-            <div class="text-3xl font-bold text-slate-50">
+            <h3
+              style="color: grey; font-size: 18px; margin-bottom: 20px"
+              class="text-xs font-semibold text-slate-300 mb-2"
+            >
+              Streaks
+            </h3>
+            <div
+              style="font-size: 48px; color: #d8d8d8"
+              class="text-3xl font-bold text-slate-50"
+            >
               {{ insights.current_streak
-              }}<span class="text-base text-slate-400 ml-1">d</span>
+              }}<span style="color: grey" class="text-base text-slate-400 ml-1"
+                >d</span
+              >
             </div>
-            <div class="text-[11px] text-slate-400 mt-1">Current streak</div>
-            <div class="text-[11px] text-slate-500 mt-2">
+            <div style="color: grey" class="text-[11px] text-slate-300 mt-1">
+              Current streak
+            </div>
+            <div style="color: grey" class="text-[11px] text-slate-400 mt-2">
               Longest streak:
-              <span class="text-slate-200"
+              <span class="text-slate-100"
                 >{{ insights.longest_streak }} days</span
               >
             </div>
@@ -52,23 +70,30 @@
 
           <!-- Hot files -->
           <div
+            style="border-radius: 10px; border-color: grey"
             class="bg-slate-900/70 border border-slate-700/70 rounded-xl p-4"
           >
-            <h3 class="text-xs font-semibold text-slate-300 mb-2">
+            <h3
+              style="color: grey; font-size: 18px; margin-bottom: 20px"
+              class="text-xs font-semibold text-slate-300 mb-2"
+            >
               Top edited files
             </h3>
             <ul class="space-y-1 max-h-40 overflow-auto">
               <li
+                style="color: grey; font-size: 12px"
                 v-for="hf in insights.hot_files"
                 :key="hf.file"
                 class="flex justify-between text-[11px] text-slate-300"
               >
                 <span class="truncate font-mono">{{ hf.file }}</span>
-                <span class="text-slate-400">{{ hf.edits }} edits</span>
+                <span style="color: #d8d8d8" class="text-slate-400"
+                  >{{ hf.edits }} edits</span
+                >
               </li>
               <li
                 v-if="insights.hot_files.length === 0"
-                class="text-[11px] text-slate-500"
+                class="text-[11px] text-slate-400"
               >
                 No file activity yet.
               </li>
@@ -77,9 +102,15 @@
 
           <!-- Activity heatmap -->
           <div
+            style="border-radius: 10px; border-color: grey"
             class="bg-slate-900/70 border border-slate-700/70 rounded-xl p-4"
           >
-            <h3 class="text-xs font-semibold text-slate-300 mb-2">Activity</h3>
+            <h3
+              style="color: grey; font-size: 18px; margin-bottom: 20px"
+              class="text-xs font-semibold text-slate-300 mb-2"
+            >
+              Activity
+            </h3>
             <div class="flex flex-wrap gap-1">
               <div
                 v-for="day in insights.activity"
@@ -94,7 +125,7 @@
                 :title="`${day.date}: ${day.count} snapshots`"
               ></div>
             </div>
-            <div class="text-[10px] text-slate-500 mt-2">
+            <div style="color: grey" class="text-[10px] text-slate-400 mt-2">
               One square = 1 day
             </div>
           </div>
@@ -112,10 +143,15 @@
       </div>
 
       <!-- Sessions list -->
-      <div v-else class="space-y-4">
+      <div style="margin-top: 40px" v-else class="space-y-4">
         <div class="flex items-center justify-between mb-2">
-          <h2 class="text-lg font-semibold text-slate-100">Sessions</h2>
-          <p class="text-xs text-slate-500">
+          <h2
+            style="font-size: 28px; color: #fff"
+            class="text-lg font-semibold text-slate-100"
+          >
+            Sessions
+          </h2>
+          <p style="color: #d8d8d8" class="text-xs text-slate-300">
             Showing {{ sessions.length }} session{{
               sessions.length === 1 ? "" : "s"
             }}
@@ -124,6 +160,7 @@
 
         <div class="space-y-3">
           <article
+            style="padding: 30px; border-color: grey; border-radius: 10px"
             v-for="session in sessions"
             :key="session.session_id"
             class="rounded-xl border border-slate-700/60 bg-slate-900/60 shadow-sm hover:border-slate-500/70 transition-colors"
@@ -133,25 +170,28 @@
               class="w-full flex flex-col gap-3 px-4 py-3 text-left"
               @click="toggleSession(session.session_id)"
             >
-              <div class="flex items-center justify-between">
+              <div class="w-full flex items-center justify-between">
                 <div class="flex items-center space-x-3">
                   <span
-                    class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium"
+                    style="margin-right: 25px"
+                    class="inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-semibold"
                     :class="
                       session.status === 'active'
-                        ? 'bg-green-500/20 text-green-300'
-                        : 'bg-slate-700/60 text-slate-300'
+                        ? 'text-green-400'
+                        : 'text-slate-400'
                     "
                   >
                     {{ session.status === "active" ? "LIVE" : "DONE" }}
                   </span>
+
                   <div>
                     <p
+                      style="color: #d8d8d8; font-size: 18px"
                       class="text-sm font-medium text-slate-100 truncate max-w-md"
                     >
                       {{ session.context || "No context provided" }}
                     </p>
-                    <p class="text-xs text-slate-500 mt-1">
+                    <p style="color: grey" class="text-xs text-slate-400 mt-1">
                       Started: {{ formatDateTime(session.started_at) }}
                       <span v-if="session.stopped_at">
                         • Ended: {{ formatDateTime(session.stopped_at) }}
@@ -161,7 +201,7 @@
                 </div>
 
                 <div class="flex items-center space-x-4 text-xs text-slate-400">
-                  <span class="flex items-center space-x-1">
+                  <span style="color: grey" class="flex items-center space-x-1">
                     <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
                     <span>{{ session.notes?.length || 0 }} notes</span>
                   </span>
@@ -173,6 +213,7 @@
                     <span>{{ session.patch_count }} snapshots</span>
                   </span>
                   <svg
+                    style="color: grey"
                     class="w-4 h-4 text-slate-400 transform transition-transform"
                     :class="
                       expandedId === session.session_id ? 'rotate-90' : ''
@@ -193,7 +234,7 @@
 
               <!-- Timeline -->
               <div v-if="session.patch_count" class="mt-1">
-                <div class="text-[11px] text-slate-500 mb-1">Timeline</div>
+                <div class="text-[11px] text-slate-400 mb-1">Timeline</div>
                 <div
                   class="relative h-2 bg-slate-800 rounded-full overflow-hidden"
                 >
@@ -213,6 +254,7 @@
 
             <!-- Expanded details -->
             <div
+              style="border: none"
               v-if="expandedId === session.session_id"
               class="border-t border-slate-700/70 bg-slate-950/60 px-4 py-4 text-sm text-slate-200"
             >
@@ -226,6 +268,7 @@
                 <!-- Notes -->
                 <div class="mb-4">
                   <h3
+                    style="font-weight: 700; color: #d8d8d8"
                     class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2"
                   >
                     Notes
@@ -245,7 +288,10 @@
                         ></span>
                       </div>
                       <div>
-                        <p class="text-xs text-slate-500 mb-0.5">
+                        <p
+                          style="color: grey"
+                          class="text-xs text-slate-400 mb-0.5"
+                        >
                           {{ note.time || formatTime(note.timestamp) }}
                         </p>
                         <p class="text-sm text-slate-100">
@@ -254,7 +300,7 @@
                       </div>
                     </div>
                   </div>
-                  <p v-else class="text-xs text-slate-500">
+                  <p style="color: grey" v-else class="text-xs text-slate-400">
                     No notes in this session.
                   </p>
                 </div>
@@ -262,6 +308,7 @@
                 <!-- Patches summary -->
                 <div class="mb-4">
                   <h3
+                    style="font-weight: 700; color: #d8d8d8"
                     class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2"
                   >
                     Snapshots in this session
@@ -272,10 +319,16 @@
                     "
                     class="space-y-1.5"
                   >
-                    <p class="text-xs text-slate-500 mb-1">
+                    <p style="color: grey" class="text-xs text-slate-400 mb-1">
                       {{ selectedSession.patches.length }} snapshots captured
                     </p>
                     <ul
+                      style="
+                        margin-top: 10px;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 10px;
+                      "
                       class="text-xs text-slate-400 space-y-1 max-h-40 overflow-auto pr-1"
                     >
                       <li
@@ -284,15 +337,24 @@
                         class="flex items-center justify-between gap-2"
                       >
                         <div class="flex flex-col">
-                          <span class="text-slate-200">
+                          <span class="text-slate-200" style="color: gray">
                             {{ p.time }} • {{ p.commit.slice(0, 8) }}
                           </span>
-                          <span class="truncate max-w-xs text-slate-500">
+                          <span
+                            style="color: gray"
+                            class="truncate max-w-xs text-slate-400"
+                          >
                             {{ p.file }}
                           </span>
                         </div>
                         <button
-                          class="text-[11px] px-2 py-1 rounded-md border border-slate-600 text-slate-200 hover:bg-slate-800"
+                          style="
+                            border-radius: 5px;
+                            background-color: gray;
+                            color: #000;
+                            cursor: pointer;
+                          "
+                          class="text-[11px] px-2 py-1 rounded-md text-slate-200 hover:bg-slate-800"
                           @click.stop="openPatch(p.file)"
                         >
                           View diff
@@ -301,26 +363,27 @@
                     </ul>
                     <p
                       v-if="selectedSession.patches.length > 10"
-                      class="text-[11px] text-slate-500 mt-1"
+                      class="text-[11px] text-slate-400 mt-1"
                     >
                       (+{{ selectedSession.patches.length - 10 }} more…)
                     </p>
                   </div>
-                  <p v-else class="text-xs text-slate-500">
+                  <p v-else class="text-xs text-slate-400">
                     No patches found for this session window.
                   </p>
                 </div>
 
                 <!-- AI summary -->
-                <div>
+                <div style="margin-top: 20px">
                   <div class="flex items-center justify-between mb-2">
-                    <h3
-                      class="text-xs font-semibold uppercase tracking-wide text-slate-400"
-                    >
-                      AI Summary
-                    </h3>
                     <button
-                      class="inline-flex items-center px-2 py-1 rounded-md text-[11px] border border-sky-500/60 text-sky-200 hover:bg-sky-500/10 disabled:opacity-50"
+                      style="
+                        border-radius: 5px;
+                        background: #fff;
+                        color: #000;
+                        cursor: pointer;
+                      "
+                      class="inline-flex items-center px-2 py-1 rounded-md text-[11px] text-sky-200 hover:bg-sky-500/10 disabled:opacity-50"
                       :disabled="summaryLoading"
                       @click.stop="loadSummary(selectedSession.session_id)"
                     >
@@ -334,6 +397,12 @@
                   </div>
 
                   <div
+                    style="
+                      margin-top: 30px;
+                      border: none;
+                      padding: 30px;
+                      background: #c2c2c2;
+                    "
                     v-if="
                       summary && summaryForId === selectedSession.session_id
                     "
@@ -341,11 +410,6 @@
                   >
                     {{ summary.summary || summary }}
                   </div>
-
-                  <p v-else class="text-xs text-slate-500">
-                    Click "Get Summary" to generate an AI summary for this
-                    session.
-                  </p>
                 </div>
               </div>
 
@@ -361,23 +425,32 @@
 
     <!-- Patch diff modal -->
     <div
+      style="border: none"
       v-if="showPatchModal"
       class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
     >
       <div
+        style="padding: 10px; border: none"
         class="bg-slate-900 border border-slate-700 rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col"
       >
-        <div
-          class="flex items-center justify-between px-4 py-3 border-b border-slate-700"
-        >
-          <div class="text-xs text-slate-200 font-mono truncate max-w-md">
-            {{ selectedPatchFile }}
+        <div class="flex items-center justify-between px-4 py-3">
+          <div style="color: gray" class="text-sm font-semibold text-slate-200">
+            Snapshot Diff
           </div>
           <button
-            class="text-xs text-slate-400 hover:text-slate-100"
+            style="
+              background: #fff;
+              padding: 3px 8px;
+              border-radius: 8px;
+              color: red;
+              margin: 0 25px;
+              cursor: pointer;
+            "
+            class="text-slate-400 hover:text-slate-100 p-1"
             @click="showPatchModal = false"
+            title="Close"
           >
-            Close
+            close
           </button>
         </div>
         <div class="flex-1 overflow-auto bg-slate-950">
@@ -388,6 +461,12 @@
             {{ patchError }}
           </div>
           <pre
+            style="
+              color: #d8d8d8;
+              background-color: #171717;
+              border-radius: 15px;
+              padding: 30px;
+            "
             v-else
             class="p-4 text-xs font-mono text-slate-100 whitespace-pre-wrap"
             >{{ selectedPatchText }}</pre
