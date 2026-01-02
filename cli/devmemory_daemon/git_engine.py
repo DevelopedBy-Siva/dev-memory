@@ -56,12 +56,6 @@ def _scan_project_files(project_root: Path):
 
 
 def _incremental_sync(project_root: Path, repo: Path) -> int:
-    """
-    Only copy files that changed according to state.json.
-
-    Returns:
-        int: number of files changed (added/updated/deleted).
-    """
     state = _load_state(project_root)
     old_files = state.get("files", {})
 
@@ -69,7 +63,6 @@ def _incremental_sync(project_root: Path, repo: Path) -> int:
     changed: list[str] = []
     deleted: list[str] = []
 
-    # detect added/modified
     for rel, meta in new_files.items():
         if rel not in old_files:
             changed.append(rel)
@@ -78,12 +71,10 @@ def _incremental_sync(project_root: Path, repo: Path) -> int:
             if old_meta["mtime"] != meta["mtime"] or old_meta["size"] != meta["size"]:
                 changed.append(rel)
 
-    # detect deleted
     for rel in old_files:
         if rel not in new_files:
             deleted.append(rel)
 
-    # apply changes to shadow repo
     for rel in changed:
         src = project_root / rel
         dst = repo / rel
@@ -93,7 +84,6 @@ def _incremental_sync(project_root: Path, repo: Path) -> int:
     for rel in deleted:
         (repo / rel).unlink(missing_ok=True)
 
-    # persist new state
     state["files"] = new_files
     _save_state(project_root, state)
 
@@ -128,18 +118,11 @@ def ensure_shadow_repo(project_root: Path) -> Path:
 
 
 def commit_and_capture_patch(project_root: Path) -> bool:
-    """
-    Perform incremental sync, commit if there are changes, and capture patch.
-
-    Returns:
-        bool: True if a new snapshot (commit + patch) was created, False otherwise.
-    """
     project_root = project_root.resolve()
     repo = ensure_shadow_repo(project_root)
 
     changed_count = _incremental_sync(project_root, repo)
 
-    # No file-level changes → no snapshot needed
     if changed_count == 0:
         return False
 
@@ -147,7 +130,6 @@ def commit_and_capture_patch(project_root: Path) -> bool:
 
     diff = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=repo)
     if diff.returncode == 0:
-        # Nothing staged → no commit
         return False
 
     subprocess.run(

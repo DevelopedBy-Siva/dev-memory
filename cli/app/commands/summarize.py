@@ -12,9 +12,6 @@ summarize_app = typer.Typer(help="AI-powered snapshot summarization")
 def summarize_run(
     date: str = typer.Option(..., help="Snapshot date, e.g., 2025-11-18")
 ):
-    """
-    Summarize a .jsonl snapshot using Gemini AI and store output in memory folder.
-    """
     console.print(f"[bold green]Summarizing snapshot for {date}...[/bold green]")
 
     try:

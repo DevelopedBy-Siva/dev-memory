@@ -14,13 +14,11 @@ from app.commands.dashboard import dashboard_app
 console = Console()
 app = typer.Typer(help="DevMemory CLI")
 
-# Core commands
 app.command("start")(start)
 app.command("stop")(stop)
 app.command("status")(status)
 app.command("logs")(logs)
 
-# Submodules
 app.add_typer(note_app, name="note")
 app.add_typer(summarize_app, name="summarize")
 app.add_typer(dashboard_app, name="dashboard")

@@ -16,7 +16,6 @@ def stop():
         console.print("[red]DevMemory is not running[/red]")
         return
 
-    # Archive current session (existing code...)
     session_file = devmemory_root(project_root) / "current_session.json"
 
     if session_file.exists():

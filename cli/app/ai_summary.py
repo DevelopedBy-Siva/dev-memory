@@ -1,184 +1,306 @@
 import os
 import json
 from pathlib import Path
-from typing import List, Dict, Iterable
+from typing import List, Dict
+from datetime import datetime, timedelta
+from collections import Counter, defaultdict
 
 import google.generativeai as genai
 from devmemory_daemon.git_engine import patches_dir
+from devmemory_daemon.syntax_diff import analyze_patch_with_syntax
 from app.utils.pidfile import get_running_project_root
 
 api_key = os.environ.get("GENAI_KEY")
 genai.configure(api_key=api_key)
 
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-2.0-flash"
 
 
-def resolve_dirs():
-    """
-    Always return snapshot & memory folders based on the project root
-    where DevMemory daemon is running.
-    """
+def get_productivity_patterns(project_root: Path, days: int = 30) -> Dict:
+    pd = patches_dir(project_root)
+    if not pd.exists():
+        return {}
+
+    cutoff = datetime.now() - timedelta(days=days)
+    patches_by_hour = defaultdict(list)
+    patches_by_day = defaultdict(int)
+    patches_by_weekday = defaultdict(int)
+
+    for patch_file in pd.glob("*.patch"):
+        try:
+            ts_str = patch_file.name.split("_")[0]
+            ts = datetime.strptime(ts_str, "%Y%m%dT%H%M%SZ")
+
+            if ts < cutoff:
+                continue
+
+            hour = ts.hour
+            date = ts.date()
+            weekday = ts.strftime("%A")
+
+            content = patch_file.read_text()
+            lines_changed = len(
+                [
+                    l
+                    for l in content.split("\n")
+                    if l.startswith("+") or l.startswith("-")
+                ]
+            )
+
+            patches_by_hour[hour].append(lines_changed)
+            patches_by_day[str(date)] += lines_changed
+            patches_by_weekday[weekday] += lines_changed
+
+        except Exception:
+            continue
+
+    hourly_avg = {
+        h: sum(lines) / len(lines) for h, lines in patches_by_hour.items() if lines
+    }
+    peak_hours = sorted(hourly_avg.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    today = datetime.now().date()
+    streak = 0
+    day = today
+    while str(day) in patches_by_day:
+        streak += 1
+        day = day - timedelta(days=1)
+
+    if patches_by_weekday:
+        best_day = max(patches_by_weekday.items(), key=lambda x: x[1])[0]
+    else:
+        best_day = None
+
+    return {
+        "peak_hours": [h for h, _ in peak_hours],
+        "peak_hours_detail": [{"hour": h, "avg_lines": avg} for h, avg in peak_hours],
+        "current_streak_days": streak,
+        "total_active_days": len(patches_by_day),
+        "most_productive_weekday": best_day,
+        "weekday_breakdown": dict(patches_by_weekday),
+        "avg_daily_output": sum(patches_by_day.values()) / max(len(patches_by_day), 1),
+    }
+
+
+def analyze_code_quality_trends(project_root: Path, days: int = 30) -> Dict:
+    pd = patches_dir(project_root)
+    if not pd.exists():
+        return {}
+
+    cutoff = datetime.now() - timedelta(days=days)
+
+    todo_count = 0
+    fixme_count = 0
+    functions_added = 0
+    functions_modified = 0
+    total_patches = 0
+
+    for patch_file in pd.glob("*.patch"):
+        try:
+            ts_str = patch_file.name.split("_")[0]
+            ts = datetime.strptime(ts_str, "%Y%m%dT%H%M%SZ")
+
+            if ts < cutoff:
+                continue
+
+            content = patch_file.read_text()
+            total_patches += 1
+
+            for line in content.split("\n"):
+                if line.startswith("+"):
+                    if "TODO" in line.upper():
+                        todo_count += 1
+                    if "FIXME" in line.upper():
+                        fixme_count += 1
+
+            syntax_stats = analyze_patch_with_syntax(content)
+            functions_added += len(syntax_stats.get("functions_added", []))
+            functions_modified += len(syntax_stats.get("functions_modified", []))
+
+        except Exception:
+            continue
+
+    return {
+        "total_patches": total_patches,
+        "todos_added": todo_count,
+        "fixmes_added": fixme_count,
+        "functions_created": functions_added,
+        "functions_modified": functions_modified,
+        "avg_todos_per_patch": todo_count / max(total_patches, 1),
+        "code_health_score": max(0, 100 - (fixme_count * 5) - (todo_count * 2)),
+    }
+
+
+def generate_session_insights(session_data: Dict) -> Dict:
+    if not session_data.get("context"):
+        return {"error": "No session context available"}
+
     project_root = get_running_project_root()
     if not project_root:
-        raise RuntimeError("DevMemory is not running. Start with: devmemory start")
+        return {"error": "DevMemory not running"}
 
-    # we mainly use memory_dir; snapshot_dir is reserved for future
-    snapshot_dir = project_root / ".devmemory" / "snapshots"
-    memory_dir = project_root / ".devmemory" / "memory"
+    pd = patches_dir(project_root)
+    session_start = datetime.fromisoformat(session_data["started_at"])
+    session_end = datetime.fromisoformat(
+        session_data.get("stopped_at", datetime.now().isoformat())
+    )
 
-    memory_dir.mkdir(parents=True, exist_ok=True)
+    all_patches = []
+    functions_changed = []
+    files_touched = set()
 
-    return snapshot_dir, memory_dir
+    for patch_file in pd.glob("*.patch"):
+        try:
+            ts_str = patch_file.name.split("_")[0]
+            ts = datetime.strptime(ts_str, "%Y%m%dT%H%M%SZ")
 
-
-def stream_jsonl(path: Path) -> Iterable[Dict]:
-    with path.open("r", encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                yield json.loads(line)
-            except Exception:
+            if not (session_start <= ts <= session_end):
                 continue
 
+            content = patch_file.read_text()
+            all_patches.append(content)
 
-INTERESTING = {
-    "task",
-    "todo",
-    "note",
-    "decision",
-    "problem",
-    "fix",
-    "context",
-    "command",
-}
+            for line in content.split("\n"):
+                if line.startswith("diff --git"):
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        files_touched.add(parts[3].replace("b/", ""))
 
+            syntax_stats = analyze_patch_with_syntax(content)
+            functions_changed.extend(syntax_stats.get("functions_added", []))
+            functions_changed.extend(syntax_stats.get("functions_modified", []))
 
-def extract_signals(snapshot_path: Path) -> List[str]:
-    lines = []
-
-    for entry in stream_jsonl(snapshot_path):
-        etype = entry.get("type", "").lower()
-        content = entry.get("content") or entry.get("text") or ""
-
-        if not content:
+        except Exception:
             continue
 
-        if etype in INTERESTING:
-            lines.append(f"{etype.upper()}: {content}")
-            continue
-
-        low = content.lower()
-        if any(kw in low for kw in ["todo", "fix", "next step"]):
-            lines.append(f"NOTE: {content}")
-
-    return lines
-
-
-def chunk_text(lines: List[str], max_chars: int = 8000) -> List[str]:
-    chunks = []
-    current = []
-    cur_len = 0
-
-    for line in lines:
-        if cur_len + len(line) + 1 > max_chars:
-            chunks.append("\n".join(current))
-            current = []
-            cur_len = 0
-
-        current.append(line)
-        cur_len += len(line)
-
-    if current:
-        chunks.append("\n".join(current))
-
-    return chunks
-
-
-def gsum(text: str) -> str:
     model = genai.GenerativeModel(MODEL_NAME)
 
-    prompt = f"""
-Summarize the developer logs below.
+    combined_context = f"""
+SESSION GOAL: {session_data['context']}
 
-Extract:
-- tasks completed
-- tasks in progress
-- pending tasks
-- key decisions
-- problems encountered
-- solutions
-- notes
-- reasoning steps
+DEVELOPER NOTES:
+{chr(10).join(f"- [{n['time']}] {n['text']}" for n in session_data.get('notes', []))}
 
-Be concise and structured.
+FILES MODIFIED: {len(files_touched)}
+{chr(10).join(list(files_touched)[:10])}
 
---- LOGS START ---
-{text}
---- LOGS END ---
+FUNCTIONS CHANGED: {len(set(functions_changed))}
+{chr(10).join(list(set(functions_changed))[:15])}
+
+CODE SAMPLE (last patch):
+{all_patches[-1][:1500] if all_patches else 'No patches yet'}
 """
-    response = model.generate_content(prompt)
-    return response.text.strip()
+
+    prompt = f"""
+You are analyzing a developer's coding session. Based on the context below, provide:
+
+1. **Progress Assessment**: What % complete is the work? (0-100)
+2. **Status**: blocked | in_progress | ready_for_review | complete
+3. **Key Achievements**: Bullet list of what was accomplished
+4. **Blockers**: Any issues or dependencies preventing progress
+5. **Next Steps**: Specific 2-3 actions to take next
+6. **Time Estimate**: How much more time needed to complete
+
+Be specific, concise, and actionable. Use the function names and file changes as evidence.
+
+{combined_context}
+
+Respond in JSON format:
+{{
+  "progress_percent": 0-100,
+  "status": "blocked|in_progress|ready_for_review|complete",
+  "achievements": ["item1", "item2"],
+  "blockers": ["item1"] or [],
+  "next_steps": ["step1", "step2", "step3"],
+  "time_remaining": "X hours/days",
+  "confidence": "high|medium|low"
+}}
+"""
+
+    try:
+        response = model.generate_content(prompt)
+        result = json.loads(
+            response.text.strip().replace("```json", "").replace("```", "")
+        )
+
+        return {
+            "mode": "smart",
+            "insights": result,
+            "context": session_data["context"],
+            "files_touched": len(files_touched),
+            "functions_changed": len(set(functions_changed)),
+            "patches_analyzed": len(all_patches),
+        }
+
+    except Exception as e:
+        return {
+            "error": f"AI analysis failed: {str(e)}",
+            "fallback_stats": {
+                "files_touched": len(files_touched),
+                "functions_changed": len(set(functions_changed)),
+                "patches": len(all_patches),
+            },
+        }
 
 
 def summarize_snapshot(date: str) -> Path:
-    """
-    Summarize all DevMemory git patches for a given date (YYYY-MM-DD)
-    and store the result in <project>/.devmemory/memory/<date>-summary.json
-    """
-    # Resolve dirs (ensures memory dir exists)
-    _, memory_dir = resolve_dirs()
-
     project_root = get_running_project_root()
     if not project_root:
         raise RuntimeError("DevMemory is not running")
 
-    patch_dir = patches_dir(project_root)  # ✅ new per-project location
-    if not patch_dir.exists():
-        raise RuntimeError("No patches found for this project.")
+    pd = patches_dir(project_root)
+    if not pd.exists():
+        raise RuntimeError("No patches found")
 
-    # Convert date "2025-11-19" → "20251119"
     date_prefix = date.replace("-", "")
-
-    # Gather matching patches
-    matched = []
-    for f in patch_dir.glob("*.patch"):
-        ts = f.name.split("_")[0]  # 20251119T072344Z
-        if ts.startswith(date_prefix):
-            matched.append(f)
+    matched = [
+        f for f in pd.glob("*.patch") if f.name.split("_")[0].startswith(date_prefix)
+    ]
 
     if not matched:
-        raise FileNotFoundError(f"No patches found for date {date}")
+        raise FileNotFoundError(f"No patches for {date}")
 
-    # Merge patch texts
     combined = ""
-    for f in matched:
-        combined += f"\n--- PATCH: {f.name} ---\n"
-        combined += f.read_text()
+    all_functions = []
 
-    # Run AI summary
+    for f in matched:
+        content = f.read_text()
+        combined += f"\n--- PATCH: {f.name} ---\n{content}"
+
+        stats = analyze_patch_with_syntax(content)
+        all_functions.extend(stats.get("functions_added", []))
+        all_functions.extend(stats.get("functions_modified", []))
+
     model = genai.GenerativeModel(MODEL_NAME)
     resp = model.generate_content(
         f"""
-Summarize these git patches.
+Summarize this day of coding:
 
-Extract:
-- Work done
-- Tasks in progress
-- Bugs fixed
-- Decisions
-- Key context
-- Future work
+Functions worked on: {', '.join(set(all_functions[:20]))}
 
-{combined}
+Patches:
+{combined[:3000]}
+
+Provide:
+1. Main work accomplished
+2. Features added/modified
+3. Bugs fixed
+4. Key decisions
+5. Technical debt added
 """
     )
 
-    result = resp.text.strip()
+    memory_dir = project_root / ".devmemory" / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save output
     out_path = memory_dir / f"{date}-summary.json"
-    out_path.write_text(result)
+    summary_data = {
+        "date": date,
+        "summary": resp.text.strip(),
+        "functions_changed": list(set(all_functions)),
+        "patches_count": len(matched),
+        "generated_at": datetime.now().isoformat(),
+    }
 
+    out_path.write_text(json.dumps(summary_data, indent=2))
     return out_path

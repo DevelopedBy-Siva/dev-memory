@@ -13,15 +13,12 @@ note_app = typer.Typer(help="Add notes to current session")
 
 @note_app.command("add")
 def add_note(note: str):
-    """Add a note to the current coding session"""
-
     project_root = get_running_project_root()
     if not project_root:
         console.print("[red]DevMemory is not running.[/red]")
         console.print("Start it with: [bold]devmemory start[/bold]")
         raise typer.Exit(1)
 
-    # Load current session
     session_file = devmemory_root(project_root) / "current_session.json"
 
     if not session_file.exists():
@@ -30,7 +27,6 @@ def add_note(note: str):
 
     session_data = json.loads(session_file.read_text())
 
-    # Add note
     session_data["notes"].append(
         {
             "text": note,
@@ -39,7 +35,6 @@ def add_note(note: str):
         }
     )
 
-    # Save
     session_file.write_text(json.dumps(session_data, indent=2))
 
     console.print(f"[green]✓ Note added:[/green] {note}")
@@ -47,7 +42,6 @@ def add_note(note: str):
 
 @note_app.command("list")
 def list_notes():
-    """List all notes from current session"""
 
     project_root = get_running_project_root()
     if not project_root:

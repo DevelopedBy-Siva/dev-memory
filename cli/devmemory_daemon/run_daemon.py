@@ -9,7 +9,11 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 from devmemory_daemon.git_engine import commit_and_capture_patch, devmemory_root
-from app.utils.config import LOG_FILE  # global ~/.devmemory/daemon.log
+from devmemory_daemon.monitor_config import (
+    should_ignore_path,
+    DebounceManager,
+)
+from app.utils.config import LOG_FILE
 
 logging.basicConfig(
     filename=str(LOG_FILE),
@@ -32,35 +36,39 @@ signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGHUP, handle_signal)
 
 
-IGNORE_DIRS = {".git", ".devmemory", "__pycache__", "node_modules", "venv", ".venv"}
-
-
-def _is_ignored(path: Path, project_root: Path) -> bool:
-    try:
-        rel = path.relative_to(project_root)
-    except ValueError:
-        return True
-
-    # Ignore directories like node_modules, .git, etc.
-    parts = rel.parts
-    return any(part in IGNORE_DIRS for part in parts)
-
-
-class DevMemoryEventHandler(FileSystemEventHandler):
+class OptimizedEventHandler(FileSystemEventHandler):
     def __init__(self, project_root: Path):
         super().__init__()
         self.project_root = project_root
-        self.last_event_ts = 0.0
-        self.has_pending_change = False
+        self.debouncer = DebounceManager(debounce_ms=500)
+
+        self.total_events = 0
+        self.ignored_events = 0
+        self.processed_events = 0
 
     def on_any_event(self, event):
-        src = Path(event.src_path)
-        if _is_ignored(src, self.project_root):
+        self.total_events += 1
+
+        if event.is_directory:
+            self.ignored_events += 1
             return
 
-        # Mark that a relevant change happened
-        self.last_event_ts = time.time()
-        self.has_pending_change = True
+        src = Path(event.src_path)
+
+        if should_ignore_path(src, self.project_root):
+            self.ignored_events += 1
+            return
+
+        self.debouncer.add_event(str(src))
+        self.processed_events += 1
+
+    def get_stats(self):
+        return {
+            "total_events": self.total_events,
+            "ignored_events": self.ignored_events,
+            "processed_events": self.processed_events,
+            "ignore_rate": (self.ignored_events / max(self.total_events, 1)) * 100,
+        }
 
 
 def main():
@@ -71,65 +79,75 @@ def main():
     project_root = Path(sys.argv[1]).resolve()
     os.chdir(project_root)
 
-    # Lower priority so it doesn't fight with your editor/shell
     try:
         os.nice(10)
     except Exception:
         pass
 
-    log.info(f"Starting DevMemory (watch mode) for {project_root}")
+    log.info(f"Starting DevMemory (optimized mode) for {project_root}")
 
-    handler = DevMemoryEventHandler(project_root)
+    handler = OptimizedEventHandler(project_root)
     observer = Observer()
     observer.schedule(handler, str(project_root), recursive=True)
     observer.start()
 
     debounce_seconds = float(os.environ.get("DEVMEMORY_DEBOUNCE", "1.0"))
     idle_snapshot_seconds = float(os.environ.get("DEVMEMORY_IDLE_SNAPSHOT", "120"))
+    stats_interval = 300
 
     last_snapshot_time = 0.0
+    last_stats_time = time.time()
 
     try:
         while running:
             now = time.time()
 
-            # 1) If we have pending changes and no new events in the last debounce window,
-            #    take a snapshot.
-            if handler.has_pending_change:
-                if now - handler.last_event_ts >= debounce_seconds:
-                    try:
-                        did_snapshot = commit_and_capture_patch(project_root)
-                        if did_snapshot:
-                            log.info("Snapshot captured after file change.")
-                            last_snapshot_time = now
-                        else:
-                            log.info("No changes to commit on file change.")
-                    except Exception as e:
-                        log.exception(f"Error during snapshot: {e}")
-                    finally:
-                        handler.has_pending_change = False
+            if handler.debouncer.should_process():
+                pending_files = handler.debouncer.get_pending_files()
 
-            # 2) Optional: periodic snapshot in case of long-lived edits that don't trigger writes
+                log.info(f"Processing {len(pending_files)} changed files")
+
+                try:
+                    did_snapshot = commit_and_capture_patch(project_root)
+                    if did_snapshot:
+                        log.info(
+                            f"✓ Snapshot captured ({len(pending_files)} files changed)"
+                        )
+                        last_snapshot_time = now
+                    else:
+                        log.info("No substantive changes to commit")
+                except Exception as e:
+                    log.exception(f"Error during snapshot: {e}")
+
             if last_snapshot_time == 0.0:
                 last_snapshot_time = now
             elif now - last_snapshot_time >= idle_snapshot_seconds:
                 try:
                     did_snapshot = commit_and_capture_patch(project_root)
                     if did_snapshot:
-                        log.info("Periodic idle snapshot captured.")
-                    else:
-                        log.info("Periodic snapshot: no changes.")
+                        log.info("Periodic idle snapshot captured")
+                    last_snapshot_time = now
                 except Exception as e:
                     log.exception(f"Error during periodic snapshot: {e}")
-                finally:
-                    last_snapshot_time = now
+
+            if now - last_stats_time >= stats_interval:
+                stats = handler.get_stats()
+                log.info(
+                    f"Stats: {stats['total_events']} events, "
+                    f"{stats['ignore_rate']:.1f}% ignored, "
+                    f"{stats['processed_events']} processed"
+                )
+                last_stats_time = now
 
             time.sleep(0.5)
 
     finally:
         observer.stop()
         observer.join()
-        log.info("DevMemory daemon stopped cleanly.")
+
+        stats = handler.get_stats()
+        log.info(f"Final stats: {stats}")
+        log.info("DevMemory daemon stopped cleanly")
 
 
 if __name__ == "__main__":

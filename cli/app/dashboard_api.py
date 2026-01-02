@@ -39,7 +39,6 @@ def _summarize_session_with_ai(session_data: dict) -> dict:
     if not project_root:
         raise HTTPException(status_code=503, detail="DevMemory not running")
 
-    # Get patches in this session window
     all_patches = get_patches_list(project_root)
     session_start = datetime.fromisoformat(session_data["started_at"])
     session_end = datetime.fromisoformat(
@@ -72,7 +71,6 @@ def _summarize_session_with_ai(session_data: dict) -> dict:
                 if len(parts) >= 3:
                     files_modified.append(parts[-1].replace("b/", ""))
 
-    # Facts-only mode if no context
     if not session_data.get("context"):
         return {
             "mode": "facts_only",
@@ -82,7 +80,6 @@ def _summarize_session_with_ai(session_data: dict) -> dict:
             "fixmes": all_fixmes[:20],
         }
 
-    # Smart summary
     model = genai.GenerativeModel("gemini-2.0-flash")
     prompt = f"""
 You are helping a developer understand one coding session.
@@ -127,7 +124,6 @@ Be specific and concise.
 
 
 def get_current_session(project_root: Path) -> dict:
-    """Get active session data"""
     session_file = devmemory_root(project_root) / "current_session.json"
     if session_file.exists():
         return json.loads(session_file.read_text())
@@ -135,7 +131,6 @@ def get_current_session(project_root: Path) -> dict:
 
 
 def get_all_sessions(project_root: Path) -> List[dict]:
-    """Get all archived sessions"""
     sessions_dir = devmemory_root(project_root) / "sessions"
     if not sessions_dir.exists():
         return []
@@ -147,13 +142,11 @@ def get_all_sessions(project_root: Path) -> List[dict]:
         except:
             continue
 
-    # Sort by date, newest first
     sessions.sort(key=lambda x: x.get("started_at", ""), reverse=True)
     return sessions
 
 
 def get_patches_list(project_root: Path):
-    """Get all patches"""
     pd = patches_dir(project_root)
     if not pd.exists():
         return []
@@ -183,7 +176,6 @@ def get_patches_list(project_root: Path):
 
 
 def extract_todos_fixmes(patch_text: str) -> dict:
-    """Extract TODOs and FIXMEs from patch"""
     todos = []
     fixmes = []
     notes = []
@@ -202,9 +194,6 @@ def extract_todos_fixmes(patch_text: str) -> dict:
     return {"todos": todos, "fixmes": fixmes, "notes": notes}
 
 
-# ===== API Endpoints =====
-
-
 @app.get("/")
 def root():
     return {
@@ -216,12 +205,10 @@ def root():
 
 @app.get("/api/session/{session_id}/summary")
 def get_session_summary(session_id: str):
-    """AI summary for a specific session (archived or current)."""
     project_root = get_running_project_root()
     if not project_root:
         raise HTTPException(status_code=503, detail="DevMemory not running")
 
-    # current session?
     current = get_current_session(project_root)
     if current and current["session_id"] == session_id:
         session_data = current
@@ -236,18 +223,12 @@ def get_session_summary(session_id: str):
 
 @app.get("/api/patch/{patch_file}", response_class=PlainTextResponse)
 def get_patch(patch_file: str):
-    """
-    Return the raw git patch text for a given patch filename.
-
-    Example: GET /api/patch/20251119T073455Z_abcd1234.patch
-    """
     project_root = get_running_project_root()
     if not project_root:
         raise HTTPException(status_code=503, detail="DevMemory not running")
 
     pd = patches_dir(project_root)
 
-    # Simple sanitization: don't allow path traversal
     if "/" in patch_file or "\\" in patch_file or not patch_file.endswith(".patch"):
         raise HTTPException(status_code=400, detail="Invalid patch name")
 
@@ -260,7 +241,6 @@ def get_patch(patch_file: str):
 
 @app.get("/api/status")
 def get_status():
-    """Get daemon status + current session"""
     project_root = get_running_project_root()
     if not project_root:
         raise HTTPException(status_code=503, detail="DevMemory daemon not running")
@@ -279,15 +259,12 @@ def get_status():
 
 @app.get("/api/sessions")
 def list_sessions():
-    """Get all sessions with context and notes"""
     project_root = get_running_project_root()
     if not project_root:
         raise HTTPException(status_code=503, detail="DevMemory not running")
 
-    # Get archived sessions
     sessions = get_all_sessions(project_root)
 
-    # Add current session if active
     current = get_current_session(project_root)
     if current:
         sessions.insert(0, current)
@@ -297,23 +274,15 @@ def list_sessions():
 
 @app.get("/api/insights")
 def get_insights(days: int = 30):
-    """
-    Memory insights:
-    - most edited files (top N)
-    - streaks
-    - activity heatmap
-    """
     project_root = get_running_project_root()
     if not project_root:
         raise HTTPException(status_code=503, detail="DevMemory not running")
 
     patches = get_patches_list(project_root)
 
-    # Filter by last N days
     cutoff = datetime.now() - timedelta(days=days)
     recent = [p for p in patches if datetime.fromisoformat(p["datetime"]) >= cutoff]
 
-    # 1) Most edited files
     pd = patches_dir(project_root)
     file_counter = Counter()
     date_counter = Counter()
@@ -333,10 +302,7 @@ def get_insights(days: int = 30):
 
     hot_files = [{"file": f, "edits": c} for f, c in file_counter.most_common(10)]
 
-    # 2) Streaks (days with any patches)
-    # Build a sorted list of unique dates
     all_dates = sorted(set(date_counter.keys()))
-    # Compute streaks
     longest_streak = 0
     current_streak = 0
     last_date = None
@@ -355,7 +321,6 @@ def get_insights(days: int = 30):
 
     longest_streak = max(longest_streak, current_streak)
 
-    # Current streak: count backwards from today
     today = datetime.now().date()
     cur_streak = 0
     day = today
@@ -367,7 +332,6 @@ def get_insights(days: int = 30):
         else:
             break
 
-    # 3) Activity heatmap (per day counts)
     heatmap = [
         {"date": d, "count": date_counter[d]} for d in sorted(date_counter.keys())
     ]
@@ -383,23 +347,19 @@ def get_insights(days: int = 30):
 
 @app.get("/api/session/{session_id}")
 def get_session_detail(session_id: str):
-    """Get detailed session info with patches"""
     project_root = get_running_project_root()
     if not project_root:
         raise HTTPException(status_code=503, detail="DevMemory not running")
 
-    # Check if current session
     current = get_current_session(project_root)
     if current and current["session_id"] == session_id:
         session_data = current
     else:
-        # Check archived
         session_file = devmemory_root(project_root) / "sessions" / f"{session_id}.json"
         if not session_file.exists():
             raise HTTPException(status_code=404, detail="Session not found")
         session_data = json.loads(session_file.read_text())
 
-    # Get patches for this session
     patches = get_patches_list(project_root)
     session_start = datetime.fromisoformat(session_data["started_at"])
     session_end = datetime.fromisoformat(
@@ -421,7 +381,6 @@ def get_session_detail(session_id: str):
 
 @app.get("/api/context/smart")
 def smart_context_summary():
-    """AI summary for the current active session."""
     project_root = get_running_project_root()
     if not project_root:
         raise HTTPException(status_code=503, detail="DevMemory not running")
@@ -433,7 +392,6 @@ def smart_context_summary():
     return _summarize_session_with_ai(session)
 
 
-# Keep other existing endpoints...
 @app.get("/api/patches")
 def list_patches(limit: Optional[int] = None):
     project_root = get_running_project_root()
@@ -445,3 +403,73 @@ def list_patches(limit: Optional[int] = None):
         patches = patches[:limit]
 
     return {"patches": patches}
+
+
+@app.get("/api/productivity/patterns")
+def get_productivity_patterns(days: int = 30):
+    from app.ai_summary import get_productivity_patterns
+
+    project_root = get_running_project_root()
+    if not project_root:
+        raise HTTPException(status_code=503, detail="DevMemory not running")
+
+    patterns = get_productivity_patterns(project_root, days)
+    return patterns
+
+
+@app.get("/api/quality/trends")
+def get_quality_trends(days: int = 30):
+    from app.ai_summary import analyze_code_quality_trends
+
+    project_root = get_running_project_root()
+    if not project_root:
+        raise HTTPException(status_code=503, detail="DevMemory not running")
+
+    trends = analyze_code_quality_trends(project_root, days)
+    return trends
+
+
+@app.get("/api/session/{session_id}/insights")
+def get_deep_insights(session_id: str):
+    from app.ai_summary import generate_session_insights
+
+    project_root = get_running_project_root()
+    if not project_root:
+        raise HTTPException(status_code=503, detail="DevMemory not running")
+
+    current = get_current_session(project_root)
+    if current and current["session_id"] == session_id:
+        session_data = current
+    else:
+        session_file = devmemory_root(project_root) / "sessions" / f"{session_id}.json"
+        if not session_file.exists():
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        session_data = json.loads(session_file.read_text())
+
+    insights = generate_session_insights(session_data)
+    return insights
+
+
+@app.get("/api/stats/performance")
+def get_performance_stats():
+    project_root = get_running_project_root()
+    if not project_root:
+        raise HTTPException(status_code=503, detail="DevMemory not running")
+
+    from app.utils.config import LOG_FILE
+
+    if not LOG_FILE.exists():
+        return {"error": "No stats available"}
+
+    logs = LOG_FILE.read_text().splitlines()
+    stats_lines = [line for line in logs if "Stats:" in line or "Final stats:" in line]
+
+    if not stats_lines:
+        return {"message": "No stats recorded yet"}
+
+    return {
+        "message": "DevMemory running optimized",
+        "log_file": str(LOG_FILE),
+        "recent_activity": logs[-10:] if logs else [],
+    }

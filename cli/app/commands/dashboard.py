@@ -15,14 +15,12 @@ dashboard_app = typer.Typer(help="Run DevMemory web dashboard (FastAPI + Vue)")
 
 
 def _find_free_port() -> int:
-    """Find an available port"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
 
 
 def _create_env_config(dashboard_dir: Path, api_url: str):
-    """Create env-config.js for Vue runtime configuration"""
     public_dir = dashboard_dir / "public"
     public_dir.mkdir(exist_ok=True, parents=True)
 
@@ -38,7 +36,6 @@ window.DEVMEMORY_CONFIG = {{
 
 
 def _detect_vue_port(start_port=5173, limit=10):
-    """Detect Vite dev server port (default 5173)"""
     import http.client
 
     for p in range(start_port, start_port + limit):
@@ -56,10 +53,6 @@ def _detect_vue_port(start_port=5173, limit=10):
 
 
 def start_dashboard_background(project_root: Path):
-    """
-    Start API + Vite in the background for this project.
-    Stores their PIDs in .devmemory/dashboard_pids.json.
-    """
     CLI_ROOT = Path(__file__).resolve().parents[2]
     api_file = CLI_ROOT / "app" / "dashboard_api.py"
     dashboard_dir = CLI_ROOT / "dashboard"
@@ -70,7 +63,6 @@ def start_dashboard_background(project_root: Path):
         )
         return None
 
-    # Start API
     api_port = _find_free_port()
     api_url = f"http://127.0.0.1:{api_port}"
     _create_env_config(dashboard_dir, api_url)
@@ -98,7 +90,6 @@ def start_dashboard_background(project_root: Path):
         console.print("[yellow]uvicorn not found; dashboard API not started.[/yellow]")
         return None
 
-    # Start Vite
     try:
         vite_proc = subprocess.Popen(
             ["npm", "run", "dev"],
@@ -109,14 +100,11 @@ def start_dashboard_background(project_root: Path):
         )
     except FileNotFoundError:
         console.print("[yellow]npm not found; frontend dashboard not started.[/yellow]")
-        # We still keep the API
         vite_proc = None
 
-    # Try to detect Vite port (default 5173)
     time.sleep(2)
     vue_port = _detect_vue_port(5173) or 5173
 
-    # Save PIDs so `devmemory stop` can kill them
     pids_file = dm_root / "dashboard_pids.json"
     pids_file.write_text(
         json.dumps(
@@ -139,16 +127,12 @@ def start_dashboard_background(project_root: Path):
 
 @dashboard_app.command("run")
 def dashboard_run():
-    """Start FastAPI backend + Vue.js frontend"""
-
-    # Check if DevMemory daemon is running
     project_root = get_running_project_root()
     if not project_root:
         console.print("[red]DevMemory daemon is not running.[/red]")
         console.print("Start it with: [bold]devmemory start[/bold]")
         raise typer.Exit(1)
 
-    # Find directories
     CLI_ROOT = Path(__file__).resolve().parents[2]
     api_file = CLI_ROOT / "app" / "dashboard_api.py"
     dashboard_dir = CLI_ROOT / "dashboard"
@@ -157,7 +141,6 @@ def dashboard_run():
         console.print(f"[red]API file not found: {api_file}[/red]")
         raise typer.Exit(1)
 
-    # Start FastAPI server
     api_port = _find_free_port()
     api_url = f"http://127.0.0.1:{api_port}"
 
@@ -181,9 +164,8 @@ def dashboard_run():
         console.print("[red]uvicorn not found! Install: pip install uvicorn[/red]")
         raise typer.Exit(1)
 
-    time.sleep(2)  # Wait for API to start
+    time.sleep(2)
 
-    # Check if dashboard exists
     if not dashboard_dir.exists():
         console.print(f"[yellow]Vue dashboard not found at: {dashboard_dir}[/yellow]")
         console.print(f"[yellow]API is running at {api_url}[/yellow]")
@@ -197,15 +179,13 @@ def dashboard_run():
             api_proc.terminate()
         return
 
-    # Create runtime config for Vue
     _create_env_config(dashboard_dir, api_url)
 
-    # Start Vite dev server (changed from 'serve' to 'dev')
     console.print(f"[cyan]Starting Vite dev server in {dashboard_dir}[/cyan]")
 
     try:
         vue_proc = subprocess.Popen(
-            ["npm", "run", "dev"],  # Changed from 'serve' to 'dev'
+            ["npm", "run", "dev"],
             cwd=str(dashboard_dir),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -217,9 +197,8 @@ def dashboard_run():
 
     console.print("[green]Vite dev server started.[/green]")
 
-    # Detect Vite port (default is 5173, not 8080)
     time.sleep(3)
-    vue_port = _detect_vue_port(5173)  # Vite uses 5173 by default
+    vue_port = _detect_vue_port(5173)
 
     if vue_port:
         console.print(
@@ -232,22 +211,18 @@ def dashboard_run():
 
     console.print("Press [magenta]Ctrl+C[/magenta] to stop both servers.")
 
-    # Keep running
     try:
         while True:
             time.sleep(0.5)
 
-            # Check if processes are still alive
             if api_proc.poll() is not None:
                 console.print("[red]API server stopped unexpectedly[/red]")
-                # Print error output
                 _, stderr = api_proc.communicate()
                 if stderr:
                     console.print(f"[red]Error: {stderr.decode()}[/red]")
                 break
             if vue_proc.poll() is not None:
                 console.print("[yellow]Vue server stopped unexpectedly[/yellow]")
-                # Print error output
                 _, stderr = vue_proc.communicate()
                 if stderr:
                     console.print(f"[yellow]Error: {stderr.decode()}[/yellow]")
@@ -256,7 +231,6 @@ def dashboard_run():
     except KeyboardInterrupt:
         console.print("\n[cyan]Stopping dashboard...[/cyan]")
     finally:
-        # Cleanup
         if api_proc.poll() is None:
             api_proc.terminate()
             api_proc.wait(timeout=3)
