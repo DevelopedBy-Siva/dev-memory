@@ -65,7 +65,7 @@ pip install -e .
 cd dashboard && npm install
 ```
 
-### Setup (Optional AI)
+### Setup
 ```bash
 export GENAI_KEY="your-gemini-api-key"
 ```
@@ -119,7 +119,7 @@ devmemory CLI
 
 - **100% local** - all data in `.devmemory/` folder
 - **No telemetry** - no tracking, no cloud sync
-- **AI is optional** - only calls Gemini when you request summaries
+- **AI** - calls Gemini when you request summaries
 
 Add `.devmemory/` to your `.gitignore`.
 
